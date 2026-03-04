@@ -1478,7 +1478,6 @@ return [
   'scan_or_type_serial_number' => 'Scan or type serial number',
   'serial_numbers_qty_mismatch' => 'Serial numbers count must be equal to quantity.',
   'serial_number_already_sold' => 'Serial number is already sold',
-  'serial_number_is_for_different_product' => 'Serial number belongs to a different product',
     'secondary_unit' => 'Second unit',
     'secondary_unit_help' => 'Allows user to enter product quantity in secondary unit during purchase/sell',
     'quantity_in_second_unit' => 'Quantity in :unit',
