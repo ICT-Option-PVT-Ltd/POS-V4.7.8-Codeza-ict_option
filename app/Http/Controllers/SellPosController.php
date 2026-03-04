@@ -35,6 +35,7 @@ use App\Contact;
 use App\CustomerGroup;
 use App\Media;
 use App\Product;
+use App\ProductSerialNumber;
 use App\SellingPriceGroup;
 use App\TaxRate;
 use App\Transaction;
@@ -865,6 +866,9 @@ class SellPosController extends Controller
                     }
 
                     $sell_details[$key]->formatted_qty_available = $this->productUtil->num_f($value->qty_available, false, null, true);
+                    $sell_details[$key]->serial_numbers = ProductSerialNumber::where('sold_sell_line_id', $sell_details[$key]->transaction_sell_lines_id)
+                        ->pluck('serial_number')
+                        ->toArray();
 
                     //Add available lot numbers for dropdown to sell lines
                     $lot_numbers = [];
