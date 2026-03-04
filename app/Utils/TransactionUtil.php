@@ -14,6 +14,7 @@ use App\Exceptions\PurchaseSellMismatch;
 use App\Exceptions\AdvanceBalanceNotAvailable;
 use App\InvoiceScheme;
 use App\Product;
+use App\ProductSerialNumber;
 use App\PurchaseLine;
 use App\Restaurant\ResTable;
 use App\TaxRate;
@@ -285,12 +286,19 @@ class TransactionUtil extends Util
      */
     public function createOrUpdateSellLines($transaction, $products, $location_id, $return_deleted = false, $status_before = null, $extra_line_parameters = [], $uf_data = true)
     {
+        if (!is_object($transaction)) {
+            $transaction = Transaction::findOrFail($transaction);
+        }
+
         $lines_formatted = [];
         $modifiers_array = [];
         $edit_ids = [0];
         $modifiers_formatted = [];
         $combo_lines = [];
         $products_modified_combo = [];
+        $serial_numbers_for_new_lines = [];
+        $is_serial_number_manage_enabled = !empty(Business::where('id', $transaction->business_id)->value('enable_serial_number_manage'));
+
         foreach ($products as $product) {
             $multiplier = 1;
             if (isset($product['sub_unit_id']) && $product['sub_unit_id'] == $product['product_unit_id']) {
@@ -305,6 +313,19 @@ class TransactionUtil extends Util
             if (!empty($product['transaction_sell_lines_id'])) {
                 $edit_id_temp = $this->editSellLine($product, $location_id, $status_before, $multiplier, $uf_data);
                 $edit_ids = array_merge($edit_ids, $edit_id_temp);
+
+                if ($is_serial_number_manage_enabled && !empty($product['transaction_sell_lines_id'])) {
+                    $serial_numbers = !empty($product['serial_numbers']) ? $product['serial_numbers'] : [];
+                    $this->validateSerialNumbersForSellLine($product, $serial_numbers, $multiplier, $uf_data);
+
+                    $this->syncSellLineSerialNumbers(
+                        $transaction,
+                        $product['transaction_sell_lines_id'],
+                        $product['product_id'],
+                        $product['variation_id'],
+                        $serial_numbers
+                    );
+                }
 
                 //update or create modifiers for existing sell lines
                 if ($this->isModuleEnabled('modifiers')) {
@@ -418,6 +439,11 @@ class TransactionUtil extends Util
                 }
 
                 $lines_formatted[] = new TransactionSellLine($line);
+                $serial_numbers = !empty($product['serial_numbers']) ? $product['serial_numbers'] : [];
+                if ($is_serial_number_manage_enabled) {
+                    $this->validateSerialNumbersForSellLine($product, $serial_numbers, $multiplier, $uf_data);
+                }
+                $serial_numbers_for_new_lines[] = $serial_numbers;
 
                 $sell_line_warranties[] = !empty($product['warranty_id']) ? $product['warranty_id'] : 0;
 
@@ -471,6 +497,16 @@ class TransactionUtil extends Util
                 //Save sell line warranty if set
                 if (!empty($sell_line_warranties[$key])) {
                     $value->warranties()->sync([$sell_line_warranties[$key]]);
+                }
+
+                if ($is_serial_number_manage_enabled) {
+                    $this->syncSellLineSerialNumbers(
+                        $transaction,
+                        $value->id,
+                        $value->product_id,
+                        $value->variation_id,
+                        !empty($serial_numbers_for_new_lines[$key]) ? $serial_numbers_for_new_lines[$key] : []
+                    );
                 }
             }
         }
@@ -656,6 +692,8 @@ class TransactionUtil extends Util
                     $this->adjustQuantity($location_id, $line->product_id, $line->variation_id, $line->quantity);
                 }
 
+                $this->releaseSellLineSerialNumbers($line->id);
+
                 //Update purchase order line quantity received
                 $this->updateSalesOrderLine($line->so_line_id, 0, $line->quantity);
             }
@@ -692,6 +730,96 @@ class TransactionUtil extends Util
                 ->increment('qty_available', $increment_qty);
             }
         }
+    }
+
+
+    private function validateSerialNumbersForSellLine($product, $serial_numbers, $multiplier = 1, $uf_data = true)
+    {
+        $db_product = Product::find($product['product_id']);
+        if (empty($db_product) || empty($db_product->enable_sr_no)) {
+            return;
+        }
+
+        if (!is_array($serial_numbers)) {
+            $decoded = json_decode($serial_numbers, true);
+            $serial_numbers = is_array($decoded) ? $decoded : [];
+        }
+
+        $serial_numbers = array_values(array_unique(array_filter(array_map('trim', $serial_numbers))));
+
+        $entered_qty = $uf_data && !empty($product['quantity']) ? $this->num_uf($product['quantity']) : (!empty($product['quantity']) ? $product['quantity'] : 0);
+        $required_serial_count = (int) ($entered_qty * $multiplier);
+
+        if ($required_serial_count !== count($serial_numbers)) {
+            throw new \Exception(__('lang_v1.serial_numbers_qty_mismatch'));
+        }
+    }
+
+    private function syncSellLineSerialNumbers($transaction, $sell_line_id, $product_id, $variation_id, $serial_numbers = [])
+    {
+        if ($transaction->status == 'draft') {
+            return;
+        }
+
+        if (!is_array($serial_numbers)) {
+            $decoded = json_decode($serial_numbers, true);
+            $serial_numbers = is_array($decoded) ? $decoded : [];
+        }
+
+        $serial_numbers = array_values(array_unique(array_filter(array_map('trim', $serial_numbers))));
+
+        $serial_release_query = ProductSerialNumber::where('business_id', $transaction->business_id)
+            ->where('sold_sell_line_id', $sell_line_id);
+
+        if (!empty($serial_numbers)) {
+            $serial_release_query->whereNotIn('serial_number', $serial_numbers);
+        }
+
+        $serial_release_query->update([
+            'status' => 'available',
+            'sold_transaction_id' => null,
+            'sold_sell_line_id' => null,
+            'sold_at' => null,
+        ]);
+
+        foreach ($serial_numbers as $serial_number) {
+            $existing = ProductSerialNumber::where('business_id', $transaction->business_id)
+                ->where('serial_number', $serial_number)
+                ->first();
+
+            if (!empty($existing) && $existing->status == 'sold' && $existing->sold_sell_line_id != $sell_line_id) {
+                throw new \Exception(__('lang_v1.serial_number_already_sold') . ': ' . $serial_number);
+            }
+
+            if (!empty($existing) && !empty($existing->product_id) && (int) $existing->product_id !== (int) $product_id) {
+                throw new \Exception(__('lang_v1.serial_number_is_for_different_product') . ': ' . $serial_number);
+            }
+
+            if (empty($existing)) {
+                $existing = new ProductSerialNumber();
+                $existing->business_id = $transaction->business_id;
+                $existing->serial_number = $serial_number;
+            }
+
+            $existing->product_id = $product_id;
+            $existing->variation_id = $variation_id;
+            $existing->status = 'sold';
+            $existing->sold_transaction_id = $transaction->id;
+            $existing->sold_sell_line_id = $sell_line_id;
+            $existing->sold_at = \Carbon::now();
+            $existing->save();
+        }
+    }
+
+    private function releaseSellLineSerialNumbers($sell_line_id)
+    {
+        ProductSerialNumber::where('sold_sell_line_id', $sell_line_id)
+            ->update([
+                'status' => 'available',
+                'sold_transaction_id' => null,
+                'sold_sell_line_id' => null,
+                'sold_at' => null,
+            ]);
     }
 
     /**
