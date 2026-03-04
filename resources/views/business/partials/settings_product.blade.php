@@ -116,6 +116,17 @@
             </div>
         </div>
 
+
+        <div class="col-sm-4">
+            <div class="form-group">
+                <div class="checkbox">
+                  <label>
+                    {!! Form::checkbox('enable_serial_number_manage', 1, !empty($business->enable_serial_number_manage), [ 'class' => 'input-icheck']); !!} {{ __( 'lang_v1.enable_serial_number_manage' ) }}
+                  </label>
+                </div>
+            </div>
+        </div>
+
         <div class="clearfix"></div>
 
         <div class="col-sm-4">
