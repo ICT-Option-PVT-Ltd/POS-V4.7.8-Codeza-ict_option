@@ -191,6 +191,22 @@ class Util
         return $payment_types;
     }
 
+
+    /**
+     * Returns permitted locations for authenticated user.
+     * Falls back to all locations when called without auth context.
+     *
+     * @return array|string
+     */
+    public function getAuthUserPermittedLocations()
+    {
+        if (Auth::check() && !empty(Auth::user())) {
+            return Auth::user()->permitted_locations();
+        }
+
+        return 'all';
+    }
+
     /**
      * Returns the list of modules enabled
      *
