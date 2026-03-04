@@ -19,10 +19,6 @@ $(document).ready(function() {
     if ($('form#edit_pos_sell_form').length > 0 || $('form#add_pos_sell_form').length > 0) {
         initialize_printer();
     }
-    $('table#pos_table tbody tr.product_row').each(function() {
-        syncSerialNumbersUI($(this));
-    });
-
 
     $('select#select_location_id').change(function() {
         reset_pos_form();
@@ -303,7 +299,6 @@ $(document).ready(function() {
         pos_total_row();
 
         adjustComboQty(tr);
-        syncSerialNumbersUI(tr);
     });
 
     //If change in unit price update price including tax and line total
@@ -898,40 +893,6 @@ $(document).ready(function() {
             .select();
     });
 
-
-    $(document).on('shown.bs.modal', '.serial_numbers_modal', function() {
-        refreshSerialNumbersModal($(this).closest('tr'));
-        $(this).find('input.serial_number_scan_input').focus();
-    });
-
-    $(document).on('keypress', '.serial_number_scan_input', function(e) {
-        if (e.which === 13) {
-            e.preventDefault();
-            var modal = $(this).closest('.serial_numbers_modal');
-            var row = modal.closest('tr');
-            addSerialNumberToRow(row, $(this).val());
-            $(this).val('');
-        }
-    });
-
-    $(document).on('click', '.remove-serial-number', function() {
-        var row = $(this).closest('tr.product_row');
-        var serialNumbers = getRowSerialNumbers(row);
-        var serialToRemove = $(this).data('serial');
-        serialNumbers = serialNumbers.filter(function(number) {
-            return number !== serialToRemove;
-        });
-        setRowSerialNumbers(row, serialNumbers);
-        refreshSerialNumbersModal(row);
-    });
-
-    $('form#add_pos_sell_form, form#edit_pos_sell_form, form#add_sell_form, form#edit_sell_form').on('submit', function(e) {
-        if (!validateAllSerialNumbers()) {
-            e.preventDefault();
-            return false;
-        }
-    });
-
     //Update Order tax
     $('button#posEditOrderTaxModalUpdate').click(function() {
         //Close modal
@@ -1320,7 +1281,6 @@ $(document).ready(function() {
             qty_element.trigger('change');
         }
         adjustComboQty(tr);
-        syncSerialNumbersUI(tr);
     });
 
     //Confirmation before page load.
@@ -1624,7 +1584,6 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
                         .find('tr')
                         .last();
                     pos_each_row(this_row);
-                    syncSerialNumbersUI(this_row);
 
                     //For initial discount if present
                     var line_total = __read_number(this_row.find('input.pos_line_total'));
@@ -2712,7 +2671,6 @@ $("#sales_order_ids").on("select2:select", function (e) {
                         .find('tr')
                         .last();
                     pos_each_row(this_row);
-                    syncSerialNumbersUI(this_row);
 
                     product_row = parseInt(product_row) + 1;
 
@@ -2905,116 +2863,3 @@ $(document).on('click', '#send_for_sell_return', function(e) {
         
     }
 })
-
-function getRowSerialNumbers(row) {
-    var value = row.find('.sell_line_serial_numbers').val();
-    if (!value) {
-        return [];
-    }
-
-    try {
-        var serialNumbers = JSON.parse(value);
-        return Array.isArray(serialNumbers) ? serialNumbers : [];
-    } catch (e) {
-        return [];
-    }
-}
-
-function setRowSerialNumbers(row, serialNumbers) {
-    row.find('.sell_line_serial_numbers').val(JSON.stringify(serialNumbers));
-    syncSerialNumbersUI(row);
-}
-
-function getRequiredSerialNumbersQty(row) {
-    var qty = Math.floor(__read_number(row.find('input.pos_quantity')));
-    return qty > 0 ? qty : 0;
-}
-
-function syncSerialNumbersUI(row) {
-    if (!row.find('.add-serial-numbers-btn').length) {
-        return;
-    }
-
-    var requiredQty = getRequiredSerialNumbersQty(row);
-    var serialNumbers = getRowSerialNumbers(row).slice(0, requiredQty);
-    row.find('.sell_line_serial_numbers').val(JSON.stringify(serialNumbers));
-    row.find('.serial_numbers_count_text').text(' (' + serialNumbers.length + '/' + requiredQty + ')');
-
-    var modal = row.find('.serial_numbers_modal');
-    modal.find('.serial_numbers_help_text').text(serialNumbers.length + '/' + requiredQty);
-}
-
-function refreshSerialNumbersModal(row) {
-    if (!row.find('.serial_numbers_modal').length) {
-        return;
-    }
-
-    syncSerialNumbersUI(row);
-
-    var serialNumbers = getRowSerialNumbers(row);
-    var listHtml = '';
-    serialNumbers.forEach(function(serialNumber) {
-        var encoded = $('<div/>').text(serialNumber).html();
-        listHtml += '<span class="label label-default" style="display:inline-block;margin:3px;">' +
-            encoded +
-            ' <i class="fa fa-times text-danger cursor-pointer remove-serial-number" data-serial="' +
-            encoded +
-            '"></i></span>';
-    });
-
-    if (!listHtml) {
-        listHtml = '<small class="text-muted">No serial numbers added.</small>';
-    }
-
-    row.find('.serial_numbers_list').html(listHtml);
-}
-
-function addSerialNumberToRow(row, serialNumber) {
-    serialNumber = $.trim(serialNumber);
-    if (!serialNumber) {
-        return;
-    }
-
-    var requiredQty = getRequiredSerialNumbersQty(row);
-    var serialNumbers = getRowSerialNumbers(row);
-
-    if (serialNumbers.indexOf(serialNumber) !== -1) {
-        toastr.error('Serial number already added in this row.');
-        return;
-    }
-
-    if (serialNumbers.length >= requiredQty) {
-        toastr.error(__translate('serial_numbers_qty_mismatch'));
-        return;
-    }
-
-    serialNumbers.push(serialNumber);
-    setRowSerialNumbers(row, serialNumbers);
-    refreshSerialNumbersModal(row);
-}
-
-function validateAllSerialNumbers() {
-    var valid = true;
-    $('table#pos_table tbody tr.product_row').each(function() {
-        var row = $(this);
-        if (!row.find('.add-serial-numbers-btn').length) {
-            return;
-        }
-
-        var requiredQty = getRequiredSerialNumbersQty(row);
-        var serialNumbers = getRowSerialNumbers(row);
-
-        if (requiredQty !== serialNumbers.length) {
-            valid = false;
-            row.find('.add-serial-numbers-btn').addClass('btn-danger');
-        } else {
-            row.find('.add-serial-numbers-btn').removeClass('btn-danger');
-        }
-    });
-
-    if (!valid) {
-        toastr.error(__translate('serial_numbers_qty_mismatch'));
-    }
-
-    return valid;
-}

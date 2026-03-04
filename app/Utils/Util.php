@@ -31,8 +31,8 @@ class Util
      */
     public function num_uf($input_number, $currency_details = null)
     {
-        $thousand_separator = '';
-        $decimal_separator = '';
+        $thousand_separator  = '';
+        $decimal_separator  = '';
 
         if (!empty($currency_details)) {
             $thousand_separator = $currency_details->thousand_separator;
@@ -45,7 +45,7 @@ class Util
         $num = str_replace($thousand_separator, '', $input_number);
         $num = str_replace($decimal_separator, '.', $num);
 
-        return (float) $num;
+        return (float)$num;
     }
 
     /**
@@ -189,22 +189,6 @@ class Util
         }
 
         return $payment_types;
-    }
-
-
-    /**
-     * Returns permitted locations for authenticated user.
-     * Falls back to all locations when called without auth context.
-     *
-     * @return array|string
-     */
-    public function getAuthUserPermittedLocations()
-    {
-        if (Auth::check() && !empty(Auth::user())) {
-            return Auth::user()->permitted_locations();
-        }
-
-        return 'all';
     }
 
     /**
@@ -372,7 +356,7 @@ class Util
             $prefix = $default_prefix;
         }
 
-        $ref_digits = str_pad($ref_count, 4, 0, STR_PAD_LEFT);
+        $ref_digits =  str_pad($ref_count, 4, 0, STR_PAD_LEFT);
 
         if (!in_array($type, ['contacts', 'business_location', 'username'])) {
             $ref_year = \Carbon::now()->year;
@@ -384,15 +368,19 @@ class Util
         return $ref_number;
     }
 
-    public function is_admin($user, $business_id = null): bool
+    /**
+     * Checks if the given user is admin
+     *
+     * @param obj $user
+     * @param int $business_id
+     *
+     * @return bool
+     */
+    public function is_admin($user, $business_id = null)
     {
-        if (empty($user)) {
-            return false;
-        }
+        $business_id = empty($business_id) ? $user->business_id : $business_id;
 
-        $business_id = $business_id ?? $user->business_id;
-
-        return $user->hasRole('Admin#' . $business_id);
+        return $user->hasRole('Admin#' . $business_id) ? true : false;
     }
 
     /**
@@ -432,7 +420,7 @@ class Util
 
         foreach ($numbers as $number) {
             $nexmo->message()->send([
-                'to' => $number,
+                'to'   => $number,
                 'from' => $sms_settings['nexmo_from'],
                 'text' => $data['sms_body']
             ]);
@@ -541,31 +529,6 @@ class Util
         }
 
         return $response;
-    }
-
-    public function sendFromPos(Request $request)
-    {
-        $token = cache()->remember('dialog_sms_token', 43000, function () {
-            $res = Http::post('https://esms.dialog.lk/api/v2/user/login', [
-                'username' => config('services.dialog.username'),
-                'password' => config('services.dialog.password'),
-            ]);
-            return $res['token'];
-        });
-
-        $payload = [
-            'msisdn' => [
-                ['mobile' => ltrim($request->phone, '0')]
-            ],
-            'message' => $request->message,
-            'sourceAddress' => 'DS PHOTO',
-            'transaction_id' => now()->timestamp,
-            'payment_method' => 0
-        ];
-
-        return Http::withToken($token)
-            ->post('https://e-sms.dialog.lk/api/v2/sms', $payload)
-            ->json();
     }
 
     /**
@@ -812,12 +775,6 @@ class Util
 
         foreach ($data as $key => $value) {
             //Replace contact name
-            if (strpos($value, '{invoice_url}') !== false) {
-                $invoice_url = $this->getInvoiceUrl($transaction->id, $transaction->business_id);
-
-                $data[$key] = str_replace('{invoice_url}', $invoice_url, $data[$key]);
-            }
-
             if (strpos($value, '{contact_name}') !== false) {
                 $contact_name = empty($contact) ? $transaction->contact->name : $contact->name;
 
@@ -1413,34 +1370,15 @@ class Util
         $i = 0;
         $str = array();
         $words = array(
-            0 => '',
-            1 => 'one',
-            2 => 'two',
-            3 => 'three',
-            4 => 'four',
-            5 => 'five',
-            6 => 'six',
-            7 => 'seven',
-            8 => 'eight',
-            9 => 'nine',
-            10 => 'ten',
-            11 => 'eleven',
-            12 => 'twelve',
-            13 => 'thirteen',
-            14 => 'fourteen',
-            15 => 'fifteen',
-            16 => 'sixteen',
-            17 => 'seventeen',
-            18 => 'eighteen',
-            19 => 'nineteen',
-            20 => 'twenty',
-            30 => 'thirty',
-            40 => 'forty',
-            50 => 'fifty',
-            60 => 'sixty',
-            70 => 'seventy',
-            80 => 'eighty',
-            90 => 'ninety'
+            0 => '', 1 => 'one', 2 => 'two',
+            3 => 'three', 4 => 'four', 5 => 'five', 6 => 'six',
+            7 => 'seven', 8 => 'eight', 9 => 'nine',
+            10 => 'ten', 11 => 'eleven', 12 => 'twelve',
+            13 => 'thirteen', 14 => 'fourteen', 15 => 'fifteen',
+            16 => 'sixteen', 17 => 'seventeen', 18 => 'eighteen',
+            19 => 'nineteen', 20 => 'twenty', 30 => 'thirty',
+            40 => 'forty', 50 => 'fifty', 60 => 'sixty',
+            70 => 'seventy', 80 => 'eighty', 90 => 'ninety'
         );
         $digits = array('', 'hundred', 'thousand', 'lakh', 'crore');
         while ($i < $digits_length) {
@@ -1452,8 +1390,7 @@ class Util
                 $plural = (($counter = count($str)) && $number > 9) ? 's' : null;
                 $hundred = ($counter == 1 && $str[0]) ? ' and ' : null;
                 $str[] = ($number < 21) ? $words[$number] . ' ' . $digits[$counter] . $plural . ' ' . $hundred : $words[floor($number / 10) * 10] . ' ' . $words[$number % 10] . ' ' . $digits[$counter] . $plural . ' ' . $hundred;
-            } else
-                $str[] = null;
+            } else $str[] = null;
         }
         $whole_number_part = implode('', array_reverse($str));
         $decimal_part = ($decimal > 0) ? " point " . ($words[$decimal / 10] . " " . $words[$decimal % 10]) : '';
@@ -1625,39 +1562,11 @@ class Util
     public function createUser($request)
     {
         $user_details = $request->only([
-            'surname',
-            'first_name',
-            'last_name',
-            'email',
-            'user_type',
-            'crm_contact_id',
-            'allow_login',
-            'username',
-            'password',
-            'cmmsn_percent',
-            'max_sales_discount_percent',
-            'dob',
-            'gender',
-            'marital_status',
-            'blood_group',
-            'contact_number',
-            'alt_number',
-            'family_number',
-            'fb_link',
-            'twitter_link',
-            'social_media_1',
-            'social_media_2',
-            'custom_field_1',
-            'custom_field_2',
-            'custom_field_3',
-            'custom_field_4',
-            'guardian_name',
-            'id_proof_name',
-            'id_proof_number',
-            'permanent_address',
-            'current_address',
-            'bank_details',
-            'selected_contacts'
+            'surname', 'first_name', 'last_name', 'email',
+            'user_type', 'crm_contact_id', 'allow_login', 'username', 'password',
+            'cmmsn_percent', 'max_sales_discount_percent', 'dob', 'gender', 'marital_status', 'blood_group', 'contact_number', 'alt_number', 'family_number', 'fb_link',
+            'twitter_link', 'social_media_1', 'social_media_2', 'custom_field_1',
+            'custom_field_2', 'custom_field_3', 'custom_field_4', 'guardian_name', 'id_proof_name', 'id_proof_number', 'permanent_address', 'current_address', 'bank_details', 'selected_contacts'
         ]);
 
         $user_details['status'] = !empty($request->input('is_active')) ? $request->input('is_active') : 'inactive';

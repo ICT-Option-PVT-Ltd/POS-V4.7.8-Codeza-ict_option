@@ -39,7 +39,7 @@
 		<tr>
 			<td>
 
-
+<!-- business information here -->
 <div class="row invoice-info">
 
 	<div class="col-md-6 invoice-col width-50">
@@ -52,6 +52,7 @@
 			{{$receipt_details->invoice_no}}
 		</div>
 
+		<!-- Total Due-->
 		@if(!empty($receipt_details->total_due) && !empty($receipt_details->total_due_label))
 			<div class="bg-light-blue-active text-right font-23 padding-5">
 				<span class="pull-left bg-light-blue-active">

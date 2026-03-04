@@ -11,13 +11,12 @@
 |
 */
 
-use App\Http\Controllers\SerialNumberController;
-use App\Http\Controllers\HomeController;
-
 include_once('install_r.php');
 
 Route::middleware(['setData'])->group(function () {
-    Route::get('/', [HomeController::class, 'index']);
+    Route::get('/', function () {
+        return view('welcome');
+    });
 
     Auth::routes();
 

@@ -24,7 +24,6 @@ use DB;
 use Illuminate\Http\Request;
 use Yajra\DataTables\Facades\DataTables;
 use App\Product;
-use App\ProductSerialNumber;
 use App\Media;
 use Spatie\Activitylog\Models\Activity;
 use Illuminate\Support\Facades\Artisan;
@@ -983,9 +982,6 @@ class SellController extends Controller
                     }
                         
                     $sell_details[$key]->formatted_qty_available = $this->productUtil->num_f($value->qty_available, false, null, true);
-                    $sell_details[$key]->serial_numbers = ProductSerialNumber::where('sold_sell_line_id', $sell_details[$key]->transaction_sell_lines_id)
-                        ->pluck('serial_number')
-                        ->toArray();
                     $lot_numbers = [];
                     if (request()->session()->get('business.enable_lot_number') == 1) {
                         $lot_number_obj = $this->transactionUtil->getLotNumbersFromVariation($value->variation_id, $business_id, $location_id);

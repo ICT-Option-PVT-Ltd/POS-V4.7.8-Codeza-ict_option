@@ -157,7 +157,7 @@ class NotificationTemplate extends Model
 
     public static function notificationTags()
     {
-        return ['{contact_name}', '{invoice_number}', '{total_amount}', '{invoice_url}',
+        return ['{contact_name}', '{invoice_number}', '{total_amount}',
         '{paid_amount}', '{due_amount}', '{business_name}', '{business_logo}', '{cumulative_due_amount}', '{due_date}', '{contact_business_name}'];
     }
 

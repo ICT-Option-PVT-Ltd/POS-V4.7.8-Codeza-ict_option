@@ -120,12 +120,6 @@ class NotificationUtil extends Util
                     ->findOrFail($booking_id);
         foreach ($data as $key => $value) {
             //Replace contact name
-            if (strpos($value, '{invoice_url}') !== false) {
-                $contact_name = $booking->customer->name;
-
-                $data[$key] = str_replace('{contact_name}', $contact_name, $data[$key]);
-            }
-
             if (strpos($value, '{contact_name}') !== false) {
                 $contact_name = $booking->customer->name;
 

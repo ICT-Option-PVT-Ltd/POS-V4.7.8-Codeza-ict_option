@@ -34,11 +34,6 @@
 			{!! $product_name !!}
 		@endif
 		<input type="hidden" class="enable_sr_no" value="{{$product->enable_sr_no}}">
-		@php
-			$enable_serial_number_manage = session()->get('business.enable_serial_number_manage') == 1;
-			$serial_numbers_value = !empty($product->serial_numbers) ? json_encode($product->serial_numbers) : '';
-		@endphp
-		<input type="hidden" class="sell_line_serial_numbers" name="products[{{$row_count}}][serial_numbers]" value='{{$serial_numbers_value}}'>
 		<input type="hidden" 
 			class="product_type" 
 			name="products[{{$row_count}}][product_type]" 
@@ -99,30 +94,6 @@
 		@if(empty($is_direct_sell))
 		<div class="modal fade row_edit_product_price_model" id="row_edit_product_price_modal_{{$row_count}}" tabindex="-1" role="dialog">
 			@include('sale_pos.partials.row_edit_product_price_modal')
-		</div>
-		@endif
-
-		@if($enable_serial_number_manage && $product->enable_sr_no == 1)
-		<div class="modal fade serial_numbers_modal" id="serial_numbers_modal_{{$row_count}}" tabindex="-1" role="dialog">
-			<div class="modal-dialog" role="document">
-				<div class="modal-content">
-					<div class="modal-header">
-						<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-							<h4 class="modal-title">@lang('lang_v1.serial_numbers')</h4>
-					</div>
-					<div class="modal-body">
-						<div class="form-group">
-							<label>@lang('lang_v1.scan_or_type_serial_number')</label>
-							<input type="text" class="form-control serial_number_scan_input" autocomplete="off">
-							<p class="help-block serial_numbers_help_text"></p>
-						</div>
-						<div class="well well-sm serial_numbers_list" style="min-height: 80px;"></div>
-					</div>
-					<div class="modal-footer">
-						<button type="button" class="btn btn-default" data-dismiss="modal">@lang('messages.close')</button>
-					</div>
-				</div>
-			</div>
 		</div>
 		@endif
 
@@ -203,14 +174,6 @@
   		<br>
   		<textarea class="form-control" name="products[{{$row_count}}][sell_line_note]" rows="2">{{$sell_line_note}}</textarea>
   		<p class="help-block"><small>@lang('lang_v1.sell_line_description_help')</small></p>
-	@endif
-
-	@if($enable_serial_number_manage && $product->enable_sr_no == 1)
-		<br>
-		<button type="button" class="btn btn-xs btn-primary add-serial-numbers-btn" data-row_index="{{$row_count}}" data-toggle="modal" data-target="#serial_numbers_modal_{{$row_count}}">
-			<i class="fa fa-barcode"></i> @lang('lang_v1.add_serial_numbers')
-		</button>
-		<small class="text-muted serial_numbers_count_text"></small>
 	@endif
 	</td>
 

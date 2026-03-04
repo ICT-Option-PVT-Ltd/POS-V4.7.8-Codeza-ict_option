@@ -63,9 +63,9 @@ class HomeController extends Controller
 
         $is_admin = $this->businessUtil->is_admin(auth()->user());
 
-        // if (!auth()->user()->can('dashboard.data')) {
-        //     return view('home.index');
-        // }
+        if (!auth()->user()->can('dashboard.data')) {
+            return view('home.index');
+        }
 
         $fy = $this->businessUtil->getCurrentFinancialYear($business_id);
 
