@@ -106,11 +106,11 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::post('/products/bulk-update-location', 'ProductController@updateProductLocation');
     Route::get('/products/get-product-to-edit/{product_id}', 'ProductController@getProductToEdit');
     
-    Route::get('/products/serial-numbers', 'ProductSerialNumberController@index');
-    Route::get('/products/serial-numbers/create', 'ProductSerialNumberController@create');
-    Route::post('/products/serial-numbers', 'ProductSerialNumberController@store');
-    Route::get('/products/serial-numbers/print/{id}', 'ProductSerialNumberController@print');
-    Route::get('/products/serial-numbers/product-variations', 'ProductSerialNumberController@getProductVariations');
+    Route::get('/products/serial-numbers', 'ProductSerialNumberController@index')->name('product-serial-numbers.index');
+    Route::get('/products/serial-numbers/create', 'ProductSerialNumberController@create')->name('product-serial-numbers.create');
+    Route::post('/products/serial-numbers', 'ProductSerialNumberController@store')->name('product-serial-numbers.store');
+    Route::get('/products/serial-numbers/print/{id}', 'ProductSerialNumberController@print')->name('product-serial-numbers.print');
+    Route::get('/products/serial-numbers/product-variations', 'ProductSerialNumberController@getProductVariations')->name('product-serial-numbers.product-variations');
     Route::post('/products/get_sub_categories', 'ProductController@getSubCategories');
     Route::get('/products/get_sub_units', 'ProductController@getSubUnits');
     Route::post('/products/product_form_part', 'ProductController@getProductVariationFormPart');
