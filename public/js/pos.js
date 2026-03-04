@@ -1087,9 +1087,171 @@ $(document).ready(function() {
         }
 
         if (sell_form.valid()) {
+            if (!validateSerialNumberRows()) {
+                return false;
+            }
             window.onbeforeunload = null;
             $(this).attr('disabled', true);
             sell_form.submit();
+        }
+    });
+
+    function renderSelectedSerials(row) {
+        var list = row.find('.selected-serial-numbers-list');
+        if (!list.length) {
+            return;
+        }
+
+        var ids = row.find('.selected_serial_numbers').val();
+        var labels = list.data('labels') || [];
+        var id_arr = ids ? ids.split(',').filter(Boolean) : [];
+        row.find('.serial-number-count').text(id_arr.length);
+
+        if (!id_arr.length || !labels.length) {
+            list.html('');
+            return;
+        }
+
+        var html = '<small class="text-muted">' + labels.join(', ') + '</small>';
+        list.html(html);
+    }
+
+    function validateSerialNumberRows() {
+        var is_valid = true;
+        $('table#pos_table tbody tr').each(function() {
+            var row = $(this);
+            if (!row.find('.selected_serial_numbers').length) {
+                return;
+            }
+
+            var qty = parseInt(__read_number(row.find('.pos_quantity')) || 0);
+            var selected_ids = row.find('.selected_serial_numbers').val();
+            var selected_count = selected_ids ? selected_ids.split(',').filter(Boolean).length : 0;
+            if (qty !== selected_count) {
+                is_valid = false;
+                toastr.error('Serial numbers count must match quantity for each serial-enabled product.');
+                return false;
+            }
+        });
+
+        return is_valid;
+    }
+
+    $(document).on('click', '.add-serial-numbers', function() {
+        var row = $(this).closest('tr');
+        var qty = parseInt(__read_number(row.find('.pos_quantity')) || 0);
+        var product_id = row.find('.serial_product_id').val();
+        var variation_id = row.find('.serial_variation_id').val();
+        var selected_ids = row.find('.selected_serial_numbers').val();
+        var id_arr = selected_ids ? selected_ids.split(',').filter(Boolean) : [];
+        var labels = row.find('.selected-serial-numbers-list').data('labels') || [];
+
+        if (!$('#serial_numbers_modal').length) {
+            $('body').append('<div class="modal fade" id="serial_numbers_modal" tabindex="-1" role="dialog"><div class="modal-dialog" role="document"><div class="modal-content"><div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button><h4 class="modal-title">Add Serial Numbers</h4></div><div class="modal-body"><input type="text" id="serial_scan_input" class="form-control" placeholder="Scan serial barcode"><br><button type="button" class="btn btn-primary btn-sm" id="add_scanned_serial">Add</button><hr><ul id="serial_numbers_selected_list"></ul></div><div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Close</button><button type="button" class="btn btn-success" id="save_serial_numbers_selection">Save</button></div></div></div></div>');
+        }
+
+        var modal = $('#serial_numbers_modal');
+        modal.data('row', row);
+        modal.data('qty', qty);
+        modal.data('product_id', product_id);
+        modal.data('variation_id', variation_id);
+        modal.data('ids', id_arr);
+        modal.data('labels', labels);
+
+        var html = '';
+        labels.forEach(function(label, index) {
+            html += '<li>' + label + ' <a href="#" class="remove-serial-item" data-index="' + index + '"><i class="fa fa-times text-danger"></i></a></li>';
+        });
+        $('#serial_numbers_selected_list').html(html);
+        $('#serial_scan_input').val('');
+        modal.modal('show');
+        setTimeout(function() { $('#serial_scan_input').focus(); }, 300);
+    });
+
+    $(document).on('click', '#add_scanned_serial', function() {
+        var modal = $('#serial_numbers_modal');
+        var serial_text = $.trim($('#serial_scan_input').val());
+        if (!serial_text) {
+            return;
+        }
+
+        var ids = modal.data('ids') || [];
+        var labels = modal.data('labels') || [];
+        var row = modal.data('row');
+        var qty = modal.data('qty');
+        var all_selected = [];
+        $('table#pos_table tbody .selected_serial_numbers').each(function() {
+            var this_ids = $(this).val();
+            if (this_ids) {
+                all_selected = all_selected.concat(this_ids.split(',').filter(Boolean));
+            }
+        });
+
+        if (labels.length >= qty) {
+            toastr.error('Only quantity number of serials can be added.');
+            return;
+        }
+
+        $.get('/sells/pos/get-available-serial-number', {
+            serial_number: serial_text,
+            product_id: modal.data('product_id'),
+            variation_id: modal.data('variation_id')
+        }, function(resp) {
+            if (!resp.success) {
+                toastr.error(resp.msg);
+                return;
+            }
+
+            if (ids.indexOf(String(resp.serial.id)) !== -1 || all_selected.indexOf(String(resp.serial.id)) !== -1) {
+                toastr.error('Serial number already selected.');
+                return;
+            }
+
+            ids.push(String(resp.serial.id));
+            labels.push(resp.serial.serial_number);
+            modal.data('ids', ids);
+            modal.data('labels', labels);
+
+            $('#serial_numbers_selected_list').append('<li>' + resp.serial.serial_number + ' <a href="#" class="remove-serial-item" data-index="' + (labels.length - 1) + '"><i class="fa fa-times text-danger"></i></a></li>');
+            $('#serial_scan_input').val('').focus();
+        });
+    });
+
+    $(document).on('click', '.remove-serial-item', function(e) {
+        e.preventDefault();
+        var index = parseInt($(this).data('index'));
+        var modal = $('#serial_numbers_modal');
+        var ids = modal.data('ids') || [];
+        var labels = modal.data('labels') || [];
+        ids.splice(index, 1);
+        labels.splice(index, 1);
+        modal.data('ids', ids);
+        modal.data('labels', labels);
+
+        var html = '';
+        labels.forEach(function(label, idx) {
+            html += '<li>' + label + ' <a href="#" class="remove-serial-item" data-index="' + idx + '"><i class="fa fa-times text-danger"></i></a></li>';
+        });
+        $('#serial_numbers_selected_list').html(html);
+    });
+
+    $(document).on('click', '#save_serial_numbers_selection', function() {
+        var modal = $('#serial_numbers_modal');
+        var row = modal.data('row');
+        var ids = modal.data('ids') || [];
+        var labels = modal.data('labels') || [];
+
+        row.find('.selected_serial_numbers').val(ids.join(','));
+        var list = row.find('.selected-serial-numbers-list');
+        list.data('labels', labels);
+        renderSelectedSerials(row);
+        modal.modal('hide');
+    });
+
+    $(document).on('change', 'table#pos_table tbody .pos_quantity', function() {
+        var row = $(this).closest('tr');
+        if (row.find('.selected_serial_numbers').length) {
+            renderSelectedSerials(row);
         }
     });
 
@@ -2490,6 +2652,9 @@ function validate_discount_field() {
     discount_type_element = $('#discount_type_modal');
 
     if ($('#add_sell_form').length || $('#edit_sell_form').length) {
+        $('table#pos_table tbody tr').each(function() {
+            renderSelectedSerials($(this));
+        });
         discount_element = $('#discount_amount');
         discount_type_element = $('#discount_type');
     }
