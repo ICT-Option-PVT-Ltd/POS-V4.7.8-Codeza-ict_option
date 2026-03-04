@@ -151,6 +151,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/sells/pos/get-recent-transactions', 'SellPosController@getRecentTransactions');
     Route::get('/sells/pos/get-product-suggestion', 'SellPosController@getProductSuggestion');
     Route::get('/sells/pos/get-featured-products/{location_id}', 'SellPosController@getFeaturedProducts');
+    Route::get('/sells/pos/get-available-serial-number', 'SellPosController@getAvailableSerialNumber');
     Route::get('/reset-mapping', 'SellController@resetMapping');
 
     Route::resource('pos', 'SellPosController');
