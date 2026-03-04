@@ -315,15 +315,12 @@ class TransactionUtil extends Util
                 $edit_ids = array_merge($edit_ids, $edit_id_temp);
 
                 if ($is_serial_number_manage_enabled && !empty($product['transaction_sell_lines_id'])) {
-                    $serial_numbers = !empty($product['serial_numbers']) ? $product['serial_numbers'] : [];
-                    $this->validateSerialNumbersForSellLine($product, $serial_numbers, $multiplier, $uf_data);
-
                     $this->syncSellLineSerialNumbers(
                         $transaction,
                         $product['transaction_sell_lines_id'],
                         $product['product_id'],
                         $product['variation_id'],
-                        $serial_numbers
+                        !empty($product['serial_numbers']) ? $product['serial_numbers'] : []
                     );
                 }
 
@@ -439,11 +436,7 @@ class TransactionUtil extends Util
                 }
 
                 $lines_formatted[] = new TransactionSellLine($line);
-                $serial_numbers = !empty($product['serial_numbers']) ? $product['serial_numbers'] : [];
-                if ($is_serial_number_manage_enabled) {
-                    $this->validateSerialNumbersForSellLine($product, $serial_numbers, $multiplier, $uf_data);
-                }
-                $serial_numbers_for_new_lines[] = $serial_numbers;
+                $serial_numbers_for_new_lines[] = !empty($product['serial_numbers']) ? $product['serial_numbers'] : [];
 
                 $sell_line_warranties[] = !empty($product['warranty_id']) ? $product['warranty_id'] : 0;
 
@@ -733,28 +726,6 @@ class TransactionUtil extends Util
     }
 
 
-    private function validateSerialNumbersForSellLine($product, $serial_numbers, $multiplier = 1, $uf_data = true)
-    {
-        $db_product = Product::find($product['product_id']);
-        if (empty($db_product) || empty($db_product->enable_sr_no)) {
-            return;
-        }
-
-        if (!is_array($serial_numbers)) {
-            $decoded = json_decode($serial_numbers, true);
-            $serial_numbers = is_array($decoded) ? $decoded : [];
-        }
-
-        $serial_numbers = array_values(array_unique(array_filter(array_map('trim', $serial_numbers))));
-
-        $entered_qty = $uf_data && !empty($product['quantity']) ? $this->num_uf($product['quantity']) : (!empty($product['quantity']) ? $product['quantity'] : 0);
-        $required_serial_count = (int) ($entered_qty * $multiplier);
-
-        if ($required_serial_count !== count($serial_numbers)) {
-            throw new \Exception(__('lang_v1.serial_numbers_qty_mismatch'));
-        }
-    }
-
     private function syncSellLineSerialNumbers($transaction, $sell_line_id, $product_id, $variation_id, $serial_numbers = [])
     {
         if ($transaction->status == 'draft') {
@@ -789,10 +760,6 @@ class TransactionUtil extends Util
 
             if (!empty($existing) && $existing->status == 'sold' && $existing->sold_sell_line_id != $sell_line_id) {
                 throw new \Exception(__('lang_v1.serial_number_already_sold') . ': ' . $serial_number);
-            }
-
-            if (!empty($existing) && !empty($existing->product_id) && (int) $existing->product_id !== (int) $product_id) {
-                throw new \Exception(__('lang_v1.serial_number_is_for_different_product') . ': ' . $serial_number);
             }
 
             if (empty($existing)) {
