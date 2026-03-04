@@ -16,6 +16,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
 use App\TransactionSellLine;
+use App\ProductSerialNumber;
+use App\SellLineSerialNumber;
 use App\Events\TransactionPaymentDeleted;
 use Spatie\Activitylog\Models\Activity;
 
@@ -283,6 +285,8 @@ class SellReturnController extends Controller
 
                 $sell_return =  $this->transactionUtil->addSellReturn($input, $business_id, $user_id);
 
+                $this->syncReturnedSerialNumbers($business_id, $input['transaction_id']);
+
                 $receipt = $this->receiptContent($business_id, $sell_return->location_id, $sell_return->id);
                 
                 DB::commit();
@@ -308,6 +312,49 @@ class SellReturnController extends Controller
         }
 
         return $output;
+    }
+
+    private function syncReturnedSerialNumbers($business_id, $sell_transaction_id)
+    {
+        $common_settings = request()->session()->get('business.common_settings', []);
+        if (empty($common_settings['enable_serial_number_manage'])) {
+            return;
+        }
+
+        $sell_lines = TransactionSellLine::where('transaction_id', $sell_transaction_id)
+            ->whereNull('parent_sell_line_id')
+            ->get();
+
+        foreach ($sell_lines as $sell_line) {
+            $serial_maps = SellLineSerialNumber::where('sell_line_id', $sell_line->id)
+                ->orderBy('id')
+                ->get();
+
+            if ($serial_maps->isEmpty()) {
+                continue;
+            }
+
+            $returned_qty = (int) floor($sell_line->quantity_returned);
+            $to_make_available = $serial_maps->take($returned_qty)->pluck('product_serial_number_id')->toArray();
+            $to_keep_sold = $serial_maps->slice($returned_qty)->pluck('product_serial_number_id')->toArray();
+
+            if (!empty($to_make_available)) {
+                ProductSerialNumber::whereIn('id', $to_make_available)->update([
+                    'status' => 'available',
+                    'sold_transaction_id' => null,
+                    'sold_sell_line_id' => null,
+                    'sold_at' => null,
+                ]);
+            }
+
+            if (!empty($to_keep_sold)) {
+                ProductSerialNumber::whereIn('id', $to_keep_sold)->update([
+                    'status' => 'sold',
+                    'sold_transaction_id' => $sell_transaction_id,
+                    'sold_sell_line_id' => $sell_line->id,
+                ]);
+            }
+        }
     }
 
     /**
@@ -432,6 +479,8 @@ class SellReturnController extends Controller
                             $this->productUtil->updateProductQuantity($sell_return->location_id, $sell_line->product_id, $sell_line->variation_id, 0, $quantity_before);
                         }
                     }
+
+                    $this->syncReturnedSerialNumbers($business_id, $sell_return->return_parent_id);
 
                     $sell_return->delete();
                     foreach ($transaction_payments as $payment) {

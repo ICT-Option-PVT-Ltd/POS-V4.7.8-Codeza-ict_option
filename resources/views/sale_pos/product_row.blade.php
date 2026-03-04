@@ -1,6 +1,7 @@
 @php
 	$common_settings = session()->get('business.common_settings');
 	$multiplier = 1;
+	$enable_serial_manage = !empty($common_settings['enable_serial_number_manage']);
 @endphp
 
 @foreach($sub_units as $key => $value)
@@ -77,6 +78,8 @@
   			if(!empty($product->sell_line_note)){
   				$sell_line_note = $product->sell_line_note;
   			}
+			$selected_serial_numbers = !empty($product->selected_serial_numbers) ? $product->selected_serial_numbers : [];
+			$selected_serial_labels = !empty($product->selected_serial_numbers_labels) ? $product->selected_serial_numbers_labels : [];
   		@endphp
 
 		@if(!empty($discount))
@@ -174,6 +177,15 @@
   		<br>
   		<textarea class="form-control" name="products[{{$row_count}}][sell_line_note]" rows="2">{{$sell_line_note}}</textarea>
   		<p class="help-block"><small>@lang('lang_v1.sell_line_description_help')</small></p>
+	@endif
+
+	@if($enable_serial_manage && !empty($product->enable_sr_no))
+		<br>
+		<input type="hidden" class="selected_serial_numbers" name="products[{{$row_count}}][selected_serial_numbers]" value="{{implode(',', $selected_serial_numbers)}}">
+		<input type="hidden" class="serial_product_id" value="{{$product->product_id}}">
+		<input type="hidden" class="serial_variation_id" value="{{$product->variation_id}}">
+		<button type="button" class="btn btn-xs btn-primary add-serial-numbers">Add Serial Numbers (<span class="serial-number-count">{{count($selected_serial_numbers)}}</span>)</button>
+		<div class="selected-serial-numbers-list" data-labels='@json($selected_serial_labels)' data-ids='@json($selected_serial_numbers)'></div>
 	@endif
 	</td>
 

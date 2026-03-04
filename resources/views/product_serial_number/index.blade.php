@@ -1,0 +1,43 @@
+@extends('layouts.app')
+@section('title', 'Product Serial Numbers')
+
+@section('content')
+<section class="content-header">
+    <h1>Product Serial Numbers</h1>
+</section>
+
+<section class="content">
+    @component('components.filters', ['title' => __('report.filters')])
+    {!! Form::open(['url' => action('ProductSerialNumberController@index'), 'method' => 'get']) !!}
+    <div class="row">
+        <div class="col-md-4">{!! Form::label('product_id', 'Product:') !!}
+            {!! Form::select('product_id', $products, request('product_id'), ['class' => 'form-control select2', 'placeholder' => __('messages.please_select')]) !!}
+        </div>
+        <div class="col-md-3">{!! Form::label('status', 'Status:') !!}
+            {!! Form::select('status', ['available' => 'Available', 'sold' => 'Sold'], request('status'), ['class' => 'form-control', 'placeholder' => 'All']) !!}
+        </div>
+        <div class="col-md-2" style="margin-top: 25px;"><button type="submit" class="btn btn-primary">Filter</button></div>
+        <div class="col-md-3 text-right" style="margin-top: 25px;"><a href="{{action('ProductSerialNumberController@create')}}" class="btn btn-success">Generate Serial Numbers</a></div>
+    </div>
+    {!! Form::close() !!}
+    @endcomponent
+
+    @component('components.widget', ['class' => 'box-primary'])
+    <table class="table table-bordered table-striped">
+        <thead><tr><th>#</th><th>Product</th><th>Serial Number</th><th>Status</th><th>Sold Invoice</th></tr></thead>
+        <tbody>
+            @foreach($serial_numbers as $row)
+            <tr>
+                <td>{{$row->id}}</td>
+                <td>{{$row->product_name}} @if(!empty($row->variation_name)) - {{$row->variation_name}} @endif</td>
+                <td>{{$row->serial_number}}</td>
+                <td><span class="label @if($row->status == 'sold') bg-red @else bg-green @endif">{{$row->status}}</span></td>
+                <td>{{$row->sold_transaction_id}}</td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+    {{$serial_numbers->appends(request()->all())->links()}}
+    @endcomponent
+</section>
+@endsection
