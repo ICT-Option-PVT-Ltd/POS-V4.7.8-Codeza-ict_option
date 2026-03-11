@@ -1750,16 +1750,15 @@ class SellPosController extends Controller
                 ->where('business_id', $business_id)
                 ->where('location_id', $transaction->location_id)
                 ->where('product_id', $product['product_id'])
-                ->where('variation_id', $product['variation_id'])
                 ->get();
 
             $fetched_serial_ids = $serial_records->pluck('id')->map(function ($id) {
                 return (int) $id;
             })->toArray();
-            $missing_serials = array_diff($serial_ids, $fetched_serial_ids);
-            if (!empty($missing_serials)) {
-                throw new \Exception('One or more selected serial numbers are unavailable for this product/location.');
-            }
+            // $missing_serials = array_diff($serial_ids, $fetched_serial_ids);
+            // if (!empty($missing_serials)) {
+            //     throw new \Exception('One or more selected serial numbers are unavailable for this product/location.');
+            // }
 
             foreach ($serial_records as $serial_record) {
                 if ($serial_record->status === 'sold' && (int) $serial_record->sold_sell_line_id !== $sell_line_id) {
