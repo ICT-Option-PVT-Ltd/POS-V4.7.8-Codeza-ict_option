@@ -74,7 +74,9 @@ $(document).ready(function() {
     });
 
     $(document).on('change', 'input.product_quantity', function() {
-        update_table_row($(this).closest('tr'));
+        var tr = $(this).closest('tr');
+        update_table_row(tr);
+        updateRequiredSerialLabel(tr);
     });
     $(document).on('change', 'input.product_unit_price', function() {
         update_table_row($(this).closest('tr'));
@@ -127,6 +129,9 @@ $(document).ready(function() {
             return false;
         }
         if ($('form#stock_transfer_form').valid()) {
+            if (!validateStockTransferSerials()) {
+                return false;
+            }
             $('form#stock_transfer_form').submit();
         } else {
             return false;
@@ -160,6 +165,8 @@ $(document).ready(function() {
             __currency_convert_recursively($('#stock_transfer_table'));
         },
     });
+    $('table#stock_adjustment_product_table tbody tr').each(function(){ updateRequiredSerialLabel($(this)); });
+
     var detailRows = [];
 
     $('#stock_transfer_table tbody').on('click', '.view_stock_transfer', function() {
@@ -236,6 +243,8 @@ function stock_transfer_product_row(variation_id) {
         dataType: 'html',
         success: function(result) {
             $('table#stock_adjustment_product_table tbody').append(result);
+            var tr = $('table#stock_adjustment_product_table tbody tr').last();
+            updateRequiredSerialLabel(tr);
             update_table_total();
             $('#product_row_index').val(row_index + 1);
         },
@@ -260,6 +269,59 @@ function update_table_total() {
 
     $('span#final_total_text').text(__number_f(table_total));
     $('input#total_amount').val(table_total);
+}
+
+
+function getRequiredSerialCount(tr) {
+    var qty = parseFloat(__read_number(tr.find('input.product_quantity')) || 0);
+    var multiplier = parseFloat(tr.find('input.base_unit_multiplier').val() || 1);
+    return Math.round(qty * multiplier);
+}
+
+function updateRequiredSerialLabel(tr) {
+    if (tr.find('.serial_enabled').length) {
+        tr.find('.required-serial-count').text(getRequiredSerialCount(tr));
+    }
+}
+
+function validateStockTransferSerials() {
+    var is_valid = true;
+    var selected = [];
+
+    $('table#stock_adjustment_product_table tbody tr').each(function() {
+        var tr = $(this);
+        if (!tr.find('.serial_enabled').length) {
+            return;
+        }
+
+        var required = getRequiredSerialCount(tr);
+        var raw = tr.find('.stock-transfer-serial-input').val() || '';
+        var serials = raw.split(/\n|,/).map(function(v){ return $.trim(v); }).filter(Boolean);
+
+        if (serials.length !== required) {
+            toastr.error('Serial numbers count must match required quantity for serial-enabled transfer items.');
+            is_valid = false;
+            return false;
+        }
+
+        var duplicates = serials.filter(function(item, idx){ return serials.indexOf(item) !== idx; });
+        if (duplicates.length) {
+            toastr.error('Duplicate serial numbers in the same row are not allowed.');
+            is_valid = false;
+            return false;
+        }
+
+        for (var i = 0; i < serials.length; i++) {
+            if (selected.indexOf(serials[i]) !== -1) {
+                toastr.error('Duplicate serial numbers across transfer rows are not allowed.');
+                is_valid = false;
+                return false;
+            }
+            selected.push(serials[i]);
+        }
+    });
+
+    return is_valid;
 }
 
 $(document).on('change', '#shipping_charges', function() {

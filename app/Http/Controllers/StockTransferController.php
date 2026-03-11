@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\BusinessLocation;
 
 use App\PurchaseLine;
+use App\ProductSerialNumber;
+use App\StockTransferSerialNumber;
 use App\Transaction;
 use App\TransactionSellLinesPurchaseLines;
 use App\Utils\ModuleUtil;
@@ -296,6 +298,8 @@ class StockTransferController extends Controller
                 $this->transactionUtil->createOrUpdateSellLines($sell_transfer, $sell_lines, $input_data['location_id'], false, null, [], false);
             }
 
+            $this->syncStockTransferSerialNumbers($request, $business_id, $sell_transfer, $request->input('transfer_location_id'), $status, $products);
+
             //Purchase product in second location
             if (!empty($purchase_lines)) {
                 $purchase_transfer->purchase_lines()->createMany($purchase_lines);
@@ -360,6 +364,81 @@ class StockTransferController extends Controller
         }
 
         return redirect('stock-transfers')->with('status', $output);
+    }
+
+    private function syncStockTransferSerialNumbers(Request $request, $business_id, $sell_transfer, $transfer_to_location_id, $status, $products)
+    {
+        $common_settings = $request->session()->get('business.common_settings', []);
+        if (empty($common_settings['enable_serial_number_manage'])) {
+            return;
+        }
+
+        $existing_serial_ids = StockTransferSerialNumber::where('stock_transfer_id', $sell_transfer->id)
+            ->pluck('product_serial_number_id')
+            ->toArray();
+
+        //Rollback previously mapped serials back to source location when editing transfer
+        if (!empty($existing_serial_ids)) {
+            ProductSerialNumber::whereIn('id', $existing_serial_ids)
+                ->where('status', 'available')
+                ->update(['location_id' => $sell_transfer->location_id]);
+        }
+        StockTransferSerialNumber::where('stock_transfer_id', $sell_transfer->id)->delete();
+
+        if ($status !== 'completed') {
+            return;
+        }
+
+        $sell_lines = $sell_transfer->sell_lines()->whereNull('parent_sell_line_id')->get();
+
+        foreach ($products as $product) {
+            if (empty($product['selected_serial_numbers'])) {
+                if (!empty($product['enable_sr_no']) || !empty($product['serial_enabled'])) {
+                    throw new \Exception('Serial numbers are required for serial-enabled transfer items.');
+                }
+                continue;
+            }
+
+            $line_qty = $this->productUtil->num_uf($product['quantity']);
+            $multiplier = !empty($product['base_unit_multiplier']) ? $product['base_unit_multiplier'] : 1;
+            $required_count = (int) round($line_qty * $multiplier);
+
+            $serials = preg_split('/[
+,]+/', $product['selected_serial_numbers']);
+            $serials = array_values(array_unique(array_filter(array_map('trim', $serials))));
+
+            if ($required_count !== count($serials)) {
+                throw new \Exception('Serial numbers count mismatch in stock transfer row.');
+            }
+
+            $records = ProductSerialNumber::where('business_id', $business_id)
+                ->where('location_id', $sell_transfer->location_id)
+                ->where('product_id', $product['product_id'])
+                ->where('variation_id', $product['variation_id'])
+                ->where('status', 'available')
+                ->whereIn('serial_number', $serials)
+                ->get();
+
+            if ($records->count() !== count($serials)) {
+                throw new \Exception('One or more transfer serial numbers are invalid or unavailable in source location.');
+            }
+
+            $sell_line = $sell_lines->first(function ($line) use ($product) {
+                return (int) $line->product_id === (int) $product['product_id'] && (int) $line->variation_id === (int) $product['variation_id'];
+            });
+
+            foreach ($records as $record) {
+                StockTransferSerialNumber::create([
+                    'business_id' => $business_id,
+                    'stock_transfer_id' => $sell_transfer->id,
+                    'sell_line_id' => !empty($sell_line) ? $sell_line->id : null,
+                    'product_serial_number_id' => $record->id,
+                ]);
+            }
+
+            ProductSerialNumber::whereIn('id', $records->pluck('id')->toArray())
+                ->update(['location_id' => $transfer_to_location_id]);
+        }
     }
 
     /**
@@ -789,6 +868,8 @@ class StockTransferController extends Controller
             if (!empty($sell_lines)) {
                 $this->transactionUtil->createOrUpdateSellLines($sell_transfer, $sell_lines, $sell_transfer->location_id, false, 'draft', [], false);
             }
+
+            $this->syncStockTransferSerialNumbers($request, $business_id, $sell_transfer, $purchase_transfer->location_id, $status, $products);
 
             //Purchase product in second location
             if (!empty($purchase_lines)) {
