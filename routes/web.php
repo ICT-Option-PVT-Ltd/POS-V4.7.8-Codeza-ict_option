@@ -109,6 +109,9 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/products/serial-numbers', 'ProductSerialNumberController@index')->name('product-serial-numbers.index');
     Route::get('/products/serial-numbers/create', 'ProductSerialNumberController@create')->name('product-serial-numbers.create');
     Route::post('/products/serial-numbers', 'ProductSerialNumberController@store')->name('product-serial-numbers.store');
+    Route::get('/products/serial-numbers/preview', 'ProductSerialNumberController@preview')->name('product-serial-numbers.preview');
+    Route::post('/products/serial-numbers/save-generated', 'ProductSerialNumberController@saveGenerated')->name('product-serial-numbers.save-generated');
+    Route::get('/products/serial-numbers/print-preview', 'ProductSerialNumberController@printPreview')->name('product-serial-numbers.print-preview');
     Route::get('/products/serial-numbers/print/{id}', 'ProductSerialNumberController@print')->name('product-serial-numbers.print');
     Route::get('/products/serial-numbers/product-variations', 'ProductSerialNumberController@getProductVariations')->name('product-serial-numbers.product-variations');
     Route::post('/products/get_sub_categories', 'ProductController@getSubCategories');

@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\BusinessLocation;
 use App\Product;
 use App\ProductSerialNumber;
 use App\ProductSerialNumberGeneration;
 use App\Variation;
-use App\BusinessLocation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -55,7 +55,6 @@ class ProductSerialNumberController extends Controller
             ->pluck('name', 'id');
 
         $barcode_types = ['CODE128' => 'CODE128'];
-
         $business_locations = BusinessLocation::forDropdown($business_id);
 
         $settings = [
@@ -117,7 +116,6 @@ class ProductSerialNumberController extends Controller
             'start_from' => 'required|integer|min:1',
             'quantity' => 'required|integer|min:1|max:2000',
             'number_padding' => 'required|integer|min:0|max:12',
-
             'paper_width_mm' => 'required|numeric|min:40|max:80',
             'label_width_mm' => 'required|numeric|min:10|max:76',
             'label_height_mm' => 'required|numeric|min:8|max:40',
@@ -126,14 +124,64 @@ class ProductSerialNumberController extends Controller
             'y_offset_mm' => 'required|numeric|min:-30|max:30',
             'gap_mm' => 'required|numeric|min:0|max:10',
             'copies' => 'required|integer|min:1|max:10',
-
             'barcode_format' => 'required|in:CODE128',
             'barcode_height_mm' => 'required|numeric|min:3|max:10',
             'barcode_margin_mm' => 'required|numeric|min:0|max:2',
             'barcode_font' => 'required|in:0,1',
         ]);
 
+        $serials = [];
+        for ($i = 0; $i < $input['quantity']; $i++) {
+            $number = str_pad((string) ($input['start_from'] + $i), $input['number_padding'], '0', STR_PAD_LEFT);
+            $serial = $number;
+            if (!empty($input['prefix'])) {
+                $serial = $input['prefix'] . ($input['separator'] ?? '-') . $number;
+            }
+            if (!empty($input['middle_fix'])) {
+                $serial = $input['middle_fix'] . $serial;
+            }
+            if (!empty($input['post_fix'])) {
+                $serial .= $input['post_fix'];
+            }
+            $serials[] = mb_substr($serial, 0, 60);
+        }
+
+        $request->session()->put('generated_serial_preview', [
+            'input' => $input,
+            'serials' => $serials,
+        ]);
+
+        return redirect()->action('ProductSerialNumberController@preview');
+    }
+
+    public function preview(Request $request)
+    {
+        $preview = $request->session()->get('generated_serial_preview');
+        if (empty($preview)) {
+            return redirect()->action('ProductSerialNumberController@create');
+        }
+
+        return view('product_serial_number.preview', [
+            'input' => $preview['input'],
+            'serials' => $preview['serials'],
+        ]);
+    }
+
+    public function saveGenerated(Request $request)
+    {
+        if (!auth()->user()->can('product.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $preview = $request->session()->get('generated_serial_preview');
+        if (empty($preview)) {
+            return redirect()->action('ProductSerialNumberController@create')
+                ->with('status', ['success' => 0, 'msg' => 'No generated serials found to save.']);
+        }
+
         $business_id = $request->session()->get('user.business_id');
+        $input = $preview['input'];
+        $serials = $preview['serials'];
 
         DB::beginTransaction();
         try {
@@ -167,22 +215,7 @@ class ProductSerialNumberController extends Controller
             ]);
 
             $generated_count = 0;
-            for ($i = 0; $i < $input['quantity']; $i++) {
-                $number = str_pad((string) ($input['start_from'] + $i), $input['number_padding'], '0', STR_PAD_LEFT);
-
-                $serial = $number;
-                if (!empty($input['prefix'])) {
-                    $serial = $input['prefix'] . ($input['separator'] ?? '-') . $number;
-                }
-                if (!empty($input['middle_fix'])) {
-                    $serial = $input['middle_fix'] . $serial;
-                }
-                if (!empty($input['post_fix'])) {
-                    $serial .= $input['post_fix'];
-                }
-
-                $serial = mb_substr($serial, 0, 60);
-
+            foreach ($serials as $idx => $serial) {
                 if (!ProductSerialNumber::where('serial_number', $serial)->exists()) {
                     ProductSerialNumber::create([
                         'business_id' => $business_id,
@@ -191,7 +224,7 @@ class ProductSerialNumberController extends Controller
                         'variation_id' => $input['variation_id'] ?? null,
                         'generation_id' => $generation->id,
                         'serial_number' => $serial,
-                        'serial_order' => $i + 1,
+                        'serial_order' => $idx + 1,
                         'status' => 'available',
                     ]);
                     $generated_count++;
@@ -202,15 +235,57 @@ class ProductSerialNumberController extends Controller
             $generation->save();
 
             DB::commit();
+            $request->session()->forget('generated_serial_preview');
 
-            return redirect()->action('ProductSerialNumberController@print', [$generation->id])
-                ->with('status', ['success' => 1, 'msg' => 'Serial numbers generated successfully.']);
+            return redirect()->action('ProductSerialNumberController@index')
+                ->with('status', ['success' => 1, 'msg' => 'Generated serial numbers saved successfully.']);
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::emergency("File:" . $e->getFile(). "Line:" . $e->getLine(). "Message:" . $e->getMessage());
 
             return redirect()->back()->with('status', ['success' => 0, 'msg' => __('messages.something_went_wrong')]);
         }
+    }
+
+    public function printPreview(Request $request)
+    {
+        $preview = $request->session()->get('generated_serial_preview');
+        if (empty($preview)) {
+            return redirect()->action('ProductSerialNumberController@create');
+        }
+
+        $input = $preview['input'];
+        $generation = (object) [
+            'paper_width_mm' => $input['paper_width_mm'],
+            'sticker_width' => $input['label_width_mm'],
+            'sticker_height' => $input['label_height_mm'],
+            'label_position' => $input['label_position'],
+            'x_offset_mm' => $input['x_offset_mm'],
+            'y_offset_mm' => $input['y_offset_mm'],
+            'gap_mm' => $input['gap_mm'],
+            'copies' => $input['copies'],
+            'barcode_type' => $input['barcode_format'],
+            'barcode_margin_mm' => $input['barcode_margin_mm'],
+            'barcode_height_mm' => $input['barcode_height_mm'],
+            'barcode_font' => $input['barcode_font'],
+        ];
+
+        $paperW = (float) ($generation->paper_width_mm ?? 76);
+        $labelW = (float) ($generation->sticker_width ?? 25);
+        if ($generation->label_position === 'LEFT') {
+            $left = 0;
+        } elseif ($generation->label_position === 'CENTER') {
+            $left = max(0, ($paperW - $labelW) / 2);
+        } else {
+            $left = max(0, $paperW - $labelW);
+        }
+        $left = max(0, $left + (float) $generation->x_offset_mm);
+
+        return view('product_serial_number.print', [
+            'serials' => $preview['serials'],
+            'generation' => $generation,
+            'label_left_mm' => $left,
+        ]);
     }
 
     public function print($id)

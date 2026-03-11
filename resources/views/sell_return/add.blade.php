@@ -116,7 +116,7 @@
 									<input name="products[{{$loop->index}}][sell_line_id]" type="hidden" value="{{$sell_line->id}}">
 								</td>
 								<td>
-                                    <textarea class="form-control input-sm" name="products[{{$loop->index}}][returned_serial_numbers]" rows="2" placeholder="Scan returned serial numbers separated by comma or new line"></textarea>
+                                    {!! Form::select("products[{$loop->index}][returned_serial_numbers][]", $sold_serials_by_line[$sell_line->id] ?? [], null, ['class' => 'form-control input-sm select2', 'multiple' => 'multiple', 'data-placeholder' => 'Select sold serials']) !!}
                                 </td>
 								<td>
 									<div class="return_subtotal"></div>

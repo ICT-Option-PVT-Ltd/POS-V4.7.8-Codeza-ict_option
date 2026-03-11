@@ -1649,9 +1649,6 @@ class SellPosController extends Controller
             $query->where('location_id', $location_id);
         }
 
-        if (!empty($variation_id)) {
-            $query->where('variation_id', $variation_id);
-        }
 
         $serial_number = $query->first();
 
@@ -1742,8 +1739,12 @@ class SellPosController extends Controller
                 ->where('variation_id', $product['variation_id'])
                 ->get();
 
-            if ($serial_records->count() !== count($serial_ids)) {
-                throw new \Exception('Invalid serial numbers selected.');
+            $fetched_serial_ids = $serial_records->pluck('id')->map(function ($id) {
+                return (int) $id;
+            })->toArray();
+            $missing_serials = array_diff($serial_ids, $fetched_serial_ids);
+            if (!empty($missing_serials)) {
+                throw new \Exception('One or more selected serial numbers are unavailable for this product/location.');
             }
 
             foreach ($serial_records as $serial_record) {

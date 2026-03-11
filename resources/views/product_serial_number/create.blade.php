@@ -69,7 +69,7 @@
       </div>
 
       <div style="margin-top:15px;">
-        <button type="submit" class="btn btn-primary">Generate & Open Print Page</button>
+        <button type="submit" class="btn btn-primary">Generate Preview</button>
       </div>
       {!! Form::close() !!}
     </div>
