@@ -199,7 +199,7 @@ class ProductSerialNumberController extends Controller
             DB::rollBack();
             \Log::emergency("File:" . $e->getFile(). "Line:" . $e->getLine(). "Message:" . $e->getMessage());
 
-            return redirect()->back()->with('status', ['success' => 0, 'msg' => __('messages.something_went_wrong')]);
+            return redirect()->back()->with('status', ['success' => 0, 'msg' => "File:" . $e->getFile(). "Line:" . $e->getLine(). "Message:" . $e->getMessage()]);
         }
     }
 
