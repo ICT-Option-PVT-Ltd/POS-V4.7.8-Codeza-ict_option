@@ -10,6 +10,17 @@
         <br/>
         {{$product->sub_sku}}
 
+        @if(!empty($product->enable_sr_no) && !empty(session('business.common_settings')['enable_serial_number_manage']))
+            <br>
+            <input type="hidden" class="serial_enabled" value="1">
+            <input type="hidden" class="serial_product_id" value="{{$product->product_id}}">
+            <input type="hidden" class="serial_variation_id" value="{{$product->variation_id}}">
+            <input type="hidden" class="stock-transfer-serial-input" name="products[{{$row_index}}][selected_serial_numbers]" value="{{!empty($product->selected_serial_numbers_csv) ? $product->selected_serial_numbers_csv : ''}}">
+            <button type="button" class="btn btn-xs btn-primary add-transfer-serial-numbers">Add Serial Numbers (<span class="serial-number-count">0</span>/<span class="required-serial-count">1</span>)</button>
+            <div class="selected-transfer-serial-numbers-list"></div>
+            <small class="help-block">Scan/select available serials from source location.</small>
+        @endif
+
             @if( session()->get('business.enable_lot_number') == 1 || session()->get('business.enable_product_expiry') == 1)
             @php
                 $lot_enabled = session()->get('business.enable_lot_number');
@@ -95,6 +106,8 @@
 
         <input type="hidden" value="{{$product->enable_stock}}" 
             name="products[{{$row_index}}][enable_stock]">
+
+        <input type="hidden" value="{{$product->enable_sr_no}}" name="products[{{$row_index}}][enable_sr_no]">
         
         @if(empty($product->quantity_ordered))
             @php

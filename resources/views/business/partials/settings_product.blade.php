@@ -171,5 +171,16 @@
             </div>
         </div>
 
+        <div class="col-sm-4">
+            <div class="form-group">
+                <div class="checkbox">
+                  <label>
+                    {!! Form::checkbox('common_settings[enable_serial_number_manage]', 1, !empty($common_settings['enable_serial_number_manage']) ? true : false,
+                    [ 'class' => 'input-icheck']); !!} Enable serial numbers manage
+                  </label>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
