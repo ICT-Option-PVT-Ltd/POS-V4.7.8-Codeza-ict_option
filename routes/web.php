@@ -106,6 +106,17 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::post('/products/bulk-update-location', 'ProductController@updateProductLocation');
     Route::get('/products/get-product-to-edit/{product_id}', 'ProductController@getProductToEdit');
     
+    Route::get('/products/serial-numbers', 'ProductSerialNumberController@index')->name('product-serial-numbers.index');
+    Route::get('/products/serial-numbers/print-report', 'ProductSerialNumberController@printReport')->name('product-serial-numbers.print-report');
+    Route::get('/products/serial-numbers/create', 'ProductSerialNumberController@create')->name('product-serial-numbers.create');
+    Route::post('/products/serial-numbers', 'ProductSerialNumberController@store')->name('product-serial-numbers.store');
+    Route::get('/products/serial-numbers/preview', 'ProductSerialNumberController@preview')->name('product-serial-numbers.preview');
+    Route::post('/products/serial-numbers/save-generated', 'ProductSerialNumberController@saveGenerated')->name('product-serial-numbers.save-generated');
+    Route::delete('/products/serial-numbers/{id}', 'ProductSerialNumberController@destroy')->name('product-serial-numbers.destroy');
+    Route::post('/products/serial-numbers/bulk-delete', 'ProductSerialNumberController@destroyBulk')->name('product-serial-numbers.bulk-delete');
+    Route::get('/products/serial-numbers/print-preview', 'ProductSerialNumberController@printPreview')->name('product-serial-numbers.print-preview');
+    Route::get('/products/serial-numbers/print/{id}', 'ProductSerialNumberController@print')->name('product-serial-numbers.print');
+    Route::get('/products/serial-numbers/product-variations', 'ProductSerialNumberController@getProductVariations')->name('product-serial-numbers.product-variations');
     Route::post('/products/get_sub_categories', 'ProductController@getSubCategories');
     Route::get('/products/get_sub_units', 'ProductController@getSubUnits');
     Route::post('/products/product_form_part', 'ProductController@getProductVariationFormPart');
@@ -151,6 +162,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/sells/pos/get-recent-transactions', 'SellPosController@getRecentTransactions');
     Route::get('/sells/pos/get-product-suggestion', 'SellPosController@getProductSuggestion');
     Route::get('/sells/pos/get-featured-products/{location_id}', 'SellPosController@getFeaturedProducts');
+    Route::get('/sells/pos/get-available-serial-number', 'SellPosController@getAvailableSerialNumber');
     Route::get('/reset-mapping', 'SellController@resetMapping');
 
     Route::resource('pos', 'SellPosController');
@@ -209,6 +221,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/reports/purchase-payment-report', 'ReportController@purchasePaymentReport');
     Route::get('/reports/sell-payment-report', 'ReportController@sellPaymentReport');
     Route::get('/reports/product-stock-details', 'ReportController@productStockDetails');
+        Route::get('/reports/product-serial-numbers', 'ProductSerialNumberReportController@index');
     Route::get('/reports/adjust-product-stock', 'ReportController@adjustProductStock');
     Route::get('/reports/get-profit/{by?}', 'ReportController@getProfit');
     Route::get('/reports/items-report', 'ReportController@itemsReport');

@@ -300,7 +300,7 @@
 		    }
 		}
 		@page {
-		    size: 3.1in auto;/* width height */
+		    size: 76mm auto;/* width height */
 		    height: auto !important;
 		    margin-top: 0mm;
 		    margin-bottom: 0mm;
