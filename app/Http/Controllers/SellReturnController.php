@@ -16,6 +16,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
 use App\TransactionSellLine;
+use App\ProductSerialNumber;
+use App\SellLineSerialNumber;
 use App\Events\TransactionPaymentDeleted;
 use Spatie\Activitylog\Models\Activity;
 
@@ -241,6 +243,7 @@ class SellReturnController extends Controller
                             ->with(['sell_lines', 'location', 'return_parent', 'contact', 'tax', 'sell_lines.sub_unit', 'sell_lines.product', 'sell_lines.product.unit'])
                             ->find($id);
 
+        $sold_serials_by_line = [];
         foreach ($sell->sell_lines as $key => $value) {
             if (!empty($value->sub_unit_id)) {
                 $formated_sell_line = $this->transactionUtil->recalculateSellLineTotals($business_id, $value);
@@ -248,10 +251,14 @@ class SellReturnController extends Controller
             }
 
             $sell->sell_lines[$key]->formatted_qty = $this->transactionUtil->num_f($value->quantity, false, null, true);
+            $sold_serials_by_line[$value->id] = SellLineSerialNumber::where('sell_line_id', $value->id)
+                ->orderBy('id')
+                ->pluck('serial_number', 'product_serial_number_id')
+                ->toArray();
         }
 
         return view('sell_return.add')
-            ->with(compact('sell'));
+            ->with(compact('sell', 'sold_serials_by_line'));
     }
 
     /**
@@ -283,6 +290,8 @@ class SellReturnController extends Controller
 
                 $sell_return =  $this->transactionUtil->addSellReturn($input, $business_id, $user_id);
 
+                $this->syncReturnedSerialNumbers($business_id, $input['transaction_id'], $input['products'], $request->input('return_type', 'exchange'));
+
                 $receipt = $this->receiptContent($business_id, $sell_return->location_id, $sell_return->id);
                 
                 DB::commit();
@@ -308,6 +317,99 @@ class SellReturnController extends Controller
         }
 
         return $output;
+    }
+
+    private function syncReturnedSerialNumbers($business_id, $sell_transaction_id, $products = [], $return_type = 'exchange')
+    {
+        $common_settings = request()->session()->get('business.common_settings', []);
+        if (empty($common_settings['enable_serial_number_manage'])) {
+            return;
+        }
+
+        $sell_lines = TransactionSellLine::where('transaction_id', $sell_transaction_id)
+            ->whereNull('parent_sell_line_id')
+            ->get();
+
+        $sell_location_id = Transaction::where('id', $sell_transaction_id)->value('location_id');
+        $product_map = collect($products)->keyBy('sell_line_id');
+
+        foreach ($sell_lines as $sell_line) {
+            $serial_maps = SellLineSerialNumber::where('sell_line_id', $sell_line->id)
+                ->orderBy('id')
+                ->get();
+
+            if ($serial_maps->isEmpty()) {
+                continue;
+            }
+
+            $selected_serial_ids = [];
+            if (!empty($product_map[$sell_line->id]['returned_serial_numbers']) && is_array($product_map[$sell_line->id]['returned_serial_numbers'])) {
+                $selected_serial_ids = array_values(array_unique(array_filter(array_map('intval', $product_map[$sell_line->id]['returned_serial_numbers']))));
+            }
+
+            if (!empty($selected_serial_ids)) {
+                $returned_qty = (int) floor($sell_line->quantity_returned);
+                if ($returned_qty !== count($selected_serial_ids)) {
+                    throw new \Exception('Returned serial numbers count must match return quantity.');
+                }
+
+                $line_serial_ids = $serial_maps->pluck('product_serial_number_id')->map(function ($id) {
+                    return (int) $id;
+                })->toArray();
+                foreach ($selected_serial_ids as $serial_id) {
+                    if (!in_array((int) $serial_id, $line_serial_ids)) {
+                        throw new \Exception('Invalid returned serial number selected.');
+                    }
+                }
+
+                if ($return_type === 'damaged') {
+                    ProductSerialNumber::where('business_id', $business_id)
+                        ->whereIn('id', $selected_serial_ids)
+                        ->update([
+                            'status' => 'damaged',
+                            'sold_transaction_id' => null,
+                            'sold_sell_line_id' => null,
+                            'sold_at' => null,
+                        ]);
+                    $this->productUtil->decreaseProductQuantity($sell_line->product_id, $sell_line->variation_id, $sell_location_id, $returned_qty, 0);
+                } else {
+                    ProductSerialNumber::where('business_id', $business_id)
+                        ->whereIn('id', $selected_serial_ids)
+                        ->update([
+                            'status' => 'available',
+                            'sold_transaction_id' => null,
+                            'sold_sell_line_id' => null,
+                            'sold_at' => null,
+                        ]);
+                }
+            } else {
+                //Fallback quantity-based behavior when no explicit serials provided.
+                $returned_qty = (int) floor($sell_line->quantity_returned);
+                $to_make_available = $serial_maps->take($returned_qty)->pluck('product_serial_number_id')->toArray();
+                $to_keep_sold = $serial_maps->slice($returned_qty)->pluck('product_serial_number_id')->toArray();
+
+                if (!empty($to_make_available)) {
+                    $update_data = [
+                        'sold_transaction_id' => null,
+                        'sold_sell_line_id' => null,
+                        'sold_at' => null,
+                    ];
+                    $update_data['status'] = $return_type === 'damaged' ? 'damaged' : 'available';
+                    ProductSerialNumber::whereIn('id', $to_make_available)->update($update_data);
+                    if ($return_type === 'damaged') {
+                        $this->productUtil->decreaseProductQuantity($sell_line->product_id, $sell_line->variation_id, $sell_location_id, $returned_qty, 0);
+                    }
+                }
+
+                if (!empty($to_keep_sold)) {
+                    ProductSerialNumber::whereIn('id', $to_keep_sold)->update([
+                        'status' => 'sold',
+                        'sold_transaction_id' => $sell_transaction_id,
+                        'sold_sell_line_id' => $sell_line->id,
+                    ]);
+                }
+            }
+        }
     }
 
     /**
@@ -432,6 +534,8 @@ class SellReturnController extends Controller
                             $this->productUtil->updateProductQuantity($sell_return->location_id, $sell_line->product_id, $sell_line->variation_id, 0, $quantity_before);
                         }
                     }
+
+                    $this->syncReturnedSerialNumbers($business_id, $sell_return->return_parent_id, [], 'exchange');
 
                     $sell_return->delete();
                     foreach ($transaction_payments as $payment) {

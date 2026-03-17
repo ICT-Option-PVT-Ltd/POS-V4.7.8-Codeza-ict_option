@@ -135,6 +135,13 @@ class AdminSidebarMenu
                                 ['icon' => 'fa fas fa-barcode', 'active' => request()->segment(1) == 'labels' && request()->segment(2) == 'show']
                             );
                         }
+                        if (auth()->user()->can('product.view')) {
+                            $sub->url(
+                                action('ProductSerialNumberController@index'),
+                                'Serial Numbers',
+                                ['icon' => 'fa fas fa-barcode', 'active' => request()->segment(1) == 'products' && request()->segment(2) == 'serial-numbers']
+                            );
+                        }
                         if (auth()->user()->can('product.create')) {
                             $sub->url(
                                 action('VariationTemplateController@index'),
@@ -571,6 +578,11 @@ class AdminSidebarMenu
                                 action('ReportController@getproductSellReport'),
                                 __('lang_v1.product_sell_report'),
                                 ['icon' => 'fa fas fa-arrow-circle-up', 'active' => request()->segment(2) == 'product-sell-report']
+                            );
+                            $sub->url(
+                                action('ProductSerialNumberReportController@index'),
+                                'Product Serial Numbers',
+                                ['icon' => 'fa fas fa-barcode', 'active' => request()->segment(2) == 'product-serial-numbers']
                             );
 
                             $sub->url(

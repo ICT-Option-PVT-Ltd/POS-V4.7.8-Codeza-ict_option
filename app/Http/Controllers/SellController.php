@@ -12,6 +12,7 @@ use App\SellingPriceGroup;
 use App\TaxRate;
 use App\Transaction;
 use App\TransactionSellLine;
+use App\SellLineSerialNumber;
 use App\TypesOfService;
 use App\User;
 use App\Utils\BusinessUtil;
@@ -1001,6 +1002,10 @@ class SellController extends Controller
                         $value = $this->productUtil->changeSellLineUnit($business_id, $value);
                         $sell_details[$key] = $value;
                     }
+
+                    $serial_mappings = SellLineSerialNumber::where('sell_line_id', $sell_details[$key]->transaction_sell_lines_id)->get();
+                    $sell_details[$key]->selected_serial_numbers = $serial_mappings->pluck('product_serial_number_id')->toArray();
+                    $sell_details[$key]->selected_serial_numbers_labels = $serial_mappings->pluck('serial_number')->toArray();
 
                     if ($this->transactionUtil->isModuleEnabled('modifiers')) {
                         //Add modifier details to sel line details

@@ -41,6 +41,13 @@
 						{!! Form::text('invoice_no', !empty($sell->return_parent->invoice_no) ? $sell->return_parent->invoice_no : null, ['class' => 'form-control']); !!}
 					</div>
 				</div>
+
+                <div class="col-sm-3">
+                    <div class="form-group">
+                        {!! Form::label('return_type', 'Return Type:*') !!}
+                        {!! Form::select('return_type', ['exchange' => 'Exchange Return', 'damaged' => 'Damaged Return'], null, ['class' => 'form-control', 'required']) !!}
+                    </div>
+                </div>
 				<div class="col-sm-3">
 					<div class="form-group">
 						{!! Form::label('transaction_date', __('messages.date') . ':*') !!}
@@ -64,6 +71,7 @@
 								<th>@lang('sale.unit_price')</th>
 								<th>@lang('lang_v1.sell_quantity')</th>
 								<th>@lang('lang_v1.return_quantity')</th>
+								<th>Return Serials</th>
 								<th>@lang('lang_v1.return_subtotal')</th>
 							</tr>
 						</thead>
@@ -107,6 +115,9 @@
 									<input name="products[{{$loop->index}}][unit_price_inc_tax]" type="hidden" class="unit_price" value="{{@num_format($sell_line->unit_price_inc_tax)}}">
 									<input name="products[{{$loop->index}}][sell_line_id]" type="hidden" value="{{$sell_line->id}}">
 								</td>
+								<td>
+                                    {!! Form::select("products[{$loop->index}][returned_serial_numbers][]", $sold_serials_by_line[$sell_line->id] ?? [], null, ['class' => 'form-control input-sm select2', 'multiple' => 'multiple', 'data-placeholder' => 'Select sold serials']) !!}
+                                </td>
 								<td>
 									<div class="return_subtotal"></div>
 								</td>

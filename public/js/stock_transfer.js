@@ -74,7 +74,9 @@ $(document).ready(function() {
     });
 
     $(document).on('change', 'input.product_quantity', function() {
-        update_table_row($(this).closest('tr'));
+        var tr = $(this).closest('tr');
+        update_table_row(tr);
+        updateRequiredSerialLabel(tr);
     });
     $(document).on('change', 'input.product_unit_price', function() {
         update_table_row($(this).closest('tr'));
@@ -127,6 +129,9 @@ $(document).ready(function() {
             return false;
         }
         if ($('form#stock_transfer_form').valid()) {
+            if (!validateStockTransferSerials()) {
+                return false;
+            }
             $('form#stock_transfer_form').submit();
         } else {
             return false;
@@ -160,6 +165,8 @@ $(document).ready(function() {
             __currency_convert_recursively($('#stock_transfer_table'));
         },
     });
+    $('table#stock_adjustment_product_table tbody tr').each(function(){ updateRequiredSerialLabel($(this)); });
+
     var detailRows = [];
 
     $('#stock_transfer_table tbody').on('click', '.view_stock_transfer', function() {
@@ -236,6 +243,9 @@ function stock_transfer_product_row(variation_id) {
         dataType: 'html',
         success: function(result) {
             $('table#stock_adjustment_product_table tbody').append(result);
+            var tr = $('table#stock_adjustment_product_table tbody tr').last();
+            updateRequiredSerialLabel(tr);
+            renderSelectedTransferSerials(tr);
             update_table_total();
             $('#product_row_index').val(row_index + 1);
         },
@@ -262,6 +272,179 @@ function update_table_total() {
     $('input#total_amount').val(table_total);
 }
 
+
+function getTransferRowSerials(tr) {
+    var raw = tr.find('.stock-transfer-serial-input').val() || '';
+    return raw.split(/\n|,/).map(function(v) { return $.trim(v); }).filter(Boolean);
+}
+
+function getRequiredSerialCount(tr) {
+    var qty = parseFloat(__read_number(tr.find('input.product_quantity')) || 0);
+    var multiplier = parseFloat(tr.find('input.base_unit_multiplier').val() || 1);
+    return Math.max(0, Math.round(qty * multiplier));
+}
+
+function renderSelectedTransferSerials(tr) {
+    if (!tr.find('.serial_enabled').length) {
+        return;
+    }
+
+    var required = getRequiredSerialCount(tr);
+    var serials = getTransferRowSerials(tr);
+    tr.find('.required-serial-count').text(required);
+    tr.find('.serial-number-count').text(serials.length);
+
+    var list = tr.find('.selected-transfer-serial-numbers-list');
+    if (!serials.length) {
+        list.html('');
+        return;
+    }
+
+    list.html('<small class="text-muted">' + serials.join(', ') + '</small>');
+}
+
+function updateRequiredSerialLabel(tr) {
+    renderSelectedTransferSerials(tr);
+}
+
+function validateStockTransferSerials() {
+    var is_valid = true;
+    var selected = [];
+
+    $('table#stock_adjustment_product_table tbody tr').each(function() {
+        var tr = $(this);
+        if (!tr.find('.serial_enabled').length) {
+            return;
+        }
+
+        var required = getRequiredSerialCount(tr);
+        var serials = getTransferRowSerials(tr);
+
+        if (serials.length !== required) {
+            toastr.error('Serial numbers count must match required quantity for serial-enabled transfer items.');
+            is_valid = false;
+            return false;
+        }
+
+        var duplicates = serials.filter(function(item, idx) { return serials.indexOf(item) !== idx; });
+        if (duplicates.length) {
+            toastr.error('Duplicate serial numbers in the same row are not allowed.');
+            is_valid = false;
+            return false;
+        }
+
+        for (var i = 0; i < serials.length; i++) {
+            if (selected.indexOf(serials[i]) !== -1) {
+                toastr.error('Duplicate serial numbers across transfer rows are not allowed.');
+                is_valid = false;
+                return false;
+            }
+            selected.push(serials[i]);
+        }
+    });
+
+    return is_valid;
+}
+
+$(document).on('click', '.add-transfer-serial-numbers', function() {
+    var tr = $(this).closest('tr');
+    var required = getRequiredSerialCount(tr);
+    var serials = getTransferRowSerials(tr);
+
+    if (!$('#transfer_serial_numbers_modal').length) {
+        $('body').append('<div class="modal fade" id="transfer_serial_numbers_modal" tabindex="-1" role="dialog"><div class="modal-dialog" role="document"><div class="modal-content"><div class="modal-header"><button type="button" class="close" data-dismiss="modal"><span>&times;</span></button><h4 class="modal-title">Add Serial Numbers</h4></div><div class="modal-body"><div class="alert alert-info">Required: <span id="transfer_serial_required">0</span></div><input type="text" id="transfer_serial_scan_input" class="form-control" placeholder="Scan serial barcode"><br><button type="button" class="btn btn-primary btn-sm" id="add_scanned_transfer_serial">Add</button><hr><ul id="transfer_serial_selected_list"></ul></div><div class="modal-footer"><button type="button" class="btn btn-default" data-dismiss="modal">Close</button><button type="button" class="btn btn-success" id="save_transfer_serial_numbers_selection">Save</button></div></div></div></div>');
+    }
+
+    var modal = $('#transfer_serial_numbers_modal');
+    modal.data('row', tr);
+    modal.data('required', required);
+    modal.data('serials', serials);
+    modal.data('product_id', tr.find('.serial_product_id').val());
+
+    $('#transfer_serial_required').text(required);
+    var html = '';
+    serials.forEach(function(serial, index) {
+        html += '<li>' + serial + ' <a href="#" class="remove-transfer-serial-item" data-index="' + index + '"><i class="fa fa-times text-danger"></i></a></li>';
+    });
+    $('#transfer_serial_selected_list').html(html);
+    $('#transfer_serial_scan_input').val('');
+    modal.modal('show');
+    setTimeout(function() { $('#transfer_serial_scan_input').focus(); }, 300);
+});
+
+$(document).on('click', '#add_scanned_transfer_serial', function() {
+    var modal = $('#transfer_serial_numbers_modal');
+    var serial_text = $.trim($('#transfer_serial_scan_input').val());
+    if (!serial_text) {
+        return;
+    }
+
+    var required = parseInt(modal.data('required') || 0);
+    var serials = modal.data('serials') || [];
+    if (serials.length >= required) {
+        toastr.error('Only required quantity of serials can be added.');
+        return;
+    }
+
+    if (serials.indexOf(serial_text) !== -1) {
+        toastr.error('Serial number already added in this row.');
+        return;
+    }
+
+    var all_selected = [];
+    $('table#stock_adjustment_product_table tbody .stock-transfer-serial-input').each(function() {
+        var this_row = $(this).closest('tr');
+        if (this_row.is(modal.data('row'))) {
+            return;
+        }
+        all_selected = all_selected.concat(getTransferRowSerials(this_row));
+    });
+    if (all_selected.indexOf(serial_text) !== -1) {
+        toastr.error('Serial number already selected in another row.');
+        return;
+    }
+
+    $.get('/sells/pos/get-available-serial-number', {
+        serial_number: serial_text,
+        product_id: modal.data('product_id'),
+        location_id: $('select#location_id').val()
+    }, function(resp) {
+        if (!resp.success) {
+            toastr.error(resp.msg);
+            return;
+        }
+
+        serials.push(resp.serial.serial_number);
+        modal.data('serials', serials);
+        $('#transfer_serial_selected_list').append('<li>' + resp.serial.serial_number + ' <a href="#" class="remove-transfer-serial-item" data-index="' + (serials.length - 1) + '"><i class="fa fa-times text-danger"></i></a></li>');
+        $('#transfer_serial_scan_input').val('').focus();
+    });
+});
+
+$(document).on('click', '.remove-transfer-serial-item', function(e) {
+    e.preventDefault();
+    var modal = $('#transfer_serial_numbers_modal');
+    var index = parseInt($(this).data('index'));
+    var serials = modal.data('serials') || [];
+    serials.splice(index, 1);
+    modal.data('serials', serials);
+
+    var html = '';
+    serials.forEach(function(serial, idx) {
+        html += '<li>' + serial + ' <a href="#" class="remove-transfer-serial-item" data-index="' + idx + '"><i class="fa fa-times text-danger"></i></a></li>';
+    });
+    $('#transfer_serial_selected_list').html(html);
+});
+
+$(document).on('click', '#save_transfer_serial_numbers_selection', function() {
+    var modal = $('#transfer_serial_numbers_modal');
+    var tr = modal.data('row');
+    var serials = modal.data('serials') || [];
+
+    tr.find('.stock-transfer-serial-input').val(serials.join(','));
+    renderSelectedTransferSerials(tr);
+    modal.modal('hide');
+});
 $(document).on('change', '#shipping_charges', function() {
     update_table_total();
 });
