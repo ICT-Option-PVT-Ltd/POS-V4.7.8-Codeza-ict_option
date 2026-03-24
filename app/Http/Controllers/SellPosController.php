@@ -36,6 +36,7 @@ use App\CustomerGroup;
 use App\Media;
 use App\Product;
 use App\ProductSerialNumber;
+use App\Restaurant\ResTable;
 use App\SellLineSerialNumber;
 use App\SellingPriceGroup;
 use App\TaxRate;
@@ -258,6 +259,9 @@ class SellPosController extends Controller
         //Added check because $users is of no use if enable_contact_assign if false
         $users = config('constants.enable_contact_assign') ? User::forDropdown($business_id, false, false, false, true) : [];
 
+        $selected_table_id = request()->get('res_table_id');
+        $lock_table_selection = !empty(request()->get('lock_table_selection')) ? true : false;
+
         return view('sale_pos.create')
             ->with(compact(
                 'edit_discount',
@@ -290,8 +294,69 @@ class SellPosController extends Controller
                 'invoice_schemes',
                 'default_invoice_schemes',
                 'invoice_layouts',
-                'users'
+                'users',
+                'selected_table_id',
+                'lock_table_selection'
             ));
+    }
+
+    /**
+     * Table-wise ongoing bill board for POS.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function tableBills()
+    {
+        if (!auth()->user()->can('sell.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+        $location_id = request()->get('location_id');
+
+        $register_details = $this->cashRegisterUtil->getCurrentCashRegister(auth()->user()->id);
+        if (empty($location_id) && !empty($register_details)) {
+            $location_id = $register_details->location_id;
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, false, true);
+        $location_attributes = $business_locations['attributes'];
+        $business_locations = $business_locations['locations'];
+
+        if (empty($location_id) && !empty($business_locations)) {
+            $location_ids = array_keys($business_locations);
+            $location_id = !empty($location_ids[0]) ? $location_ids[0] : null;
+        }
+
+        $tables = collect();
+        $ongoing_bills = collect();
+        if (!empty($location_id)) {
+            $tables = ResTable::where('business_id', $business_id)
+                ->where('location_id', $location_id)
+                ->orderBy('name')
+                ->get();
+
+            $ongoing_bills = Transaction::withCount('sell_lines')
+                ->with(['contact'])
+                ->where('business_id', $business_id)
+                ->where('type', 'sell')
+                ->where('is_suspend', 1)
+                ->whereNull('sub_type')
+                ->where('location_id', $location_id)
+                ->whereNotNull('res_table_id')
+                ->orderBy('updated_at', 'desc')
+                ->get();
+        }
+
+        $ongoing_bill_by_table = $ongoing_bills->keyBy('res_table_id');
+
+        return view('sale_pos.table_bills')->with(compact(
+            'tables',
+            'ongoing_bill_by_table',
+            'location_id',
+            'business_locations',
+            'location_attributes'
+        ));
     }
 
     /**
@@ -1049,9 +1114,10 @@ class SellPosController extends Controller
 
         //Added check because $users is of no use if enable_contact_assign if false
         $users = config('constants.enable_contact_assign') ? User::forDropdown($business_id, false, false, false, true) : [];
+        $lock_table_selection = !empty(request()->get('lock_table_selection')) ? true : false;
 
         return view('sale_pos.edit')
-            ->with(compact('business_details', 'taxes', 'payment_types', 'walk_in_customer', 'sell_details', 'transaction', 'payment_lines', 'location_printer_type', 'shortcuts', 'commission_agent', 'categories', 'pos_settings', 'change_return', 'types', 'customer_groups', 'brands', 'accounts', 'waiters', 'redeem_details', 'edit_price', 'edit_discount', 'shipping_statuses', 'warranties', 'sub_type', 'pos_module_data', 'invoice_schemes', 'default_invoice_schemes', 'invoice_layouts', 'featured_products', 'customer_due', 'users'));
+            ->with(compact('business_details', 'taxes', 'payment_types', 'walk_in_customer', 'sell_details', 'transaction', 'payment_lines', 'location_printer_type', 'shortcuts', 'commission_agent', 'categories', 'pos_settings', 'change_return', 'types', 'customer_groups', 'brands', 'accounts', 'waiters', 'redeem_details', 'edit_price', 'edit_discount', 'shipping_statuses', 'warranties', 'sub_type', 'pos_module_data', 'invoice_schemes', 'default_invoice_schemes', 'invoice_layouts', 'featured_products', 'customer_due', 'users', 'lock_table_selection'));
     }
 
     /**

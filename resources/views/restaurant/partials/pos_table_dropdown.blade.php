@@ -5,7 +5,25 @@
 			<span class="input-group-addon">
 				<i class="fa fa-table"></i>
 			</span>
-			{!! Form::select('res_table_id', $tables, $view_data['res_table_id'], ['class' => 'form-control', 'placeholder' => __('restaurant.select_table')]); !!}
+			<select name="res_table_id" id="res_table_id" class="form-control" @if(!empty($lock_table_selection)) disabled @endif>
+				<option value="">@lang('restaurant.select_table')</option>
+				@foreach($tables as $table_id => $table_name)
+					@php
+						$is_occupied = in_array($table_id, $occupied_table_ids ?? []);
+						$is_selected = !empty($view_data['res_table_id']) && (int)$view_data['res_table_id'] === (int)$table_id;
+						$is_disabled = $is_occupied && !$is_selected;
+					@endphp
+					<option value="{{ $table_id }}"
+						@if($is_selected) selected @endif
+						@if($is_disabled) disabled @endif
+						style="{{ $is_occupied ? 'background-color:#dd4b39;color:#fff;' : 'background-color:#00a65a;color:#fff;' }}">
+						{{ $table_name }} - {{ $is_occupied ? 'Ongoing bill' : 'Available' }}
+					</option>
+				@endforeach
+			</select>
+			@if(!empty($lock_table_selection))
+				<input type="hidden" name="res_table_id" value="{{ $view_data['res_table_id'] ?? '' }}">
+			@endif
 		</div>
 	</div>
 </div>
@@ -36,7 +54,7 @@
 		<ul class="mb-0 pl-20">
 			@foreach($ongoing_table_bills as $ongoing_bill)
 				<li>
-					{{ $ongoing_bill->table_name }} - {{ $ongoing_bill->invoice_no }}
+					{{ $ongoing_bill->table_name }} - {{ $ongoing_bill->invoice_no }} - @lang('sale.total'): @format_currency($ongoing_bill->final_total)
 				</li>
 			@endforeach
 		</ul>
