@@ -39,12 +39,19 @@ $(document).ready(function() {
 
 function getLocationTables(location_id) {
     var transaction_id = $('span#restaurant_module_span').data('transaction_id');
+    var selected_table_id = $('input#selected_res_table_id').val();
+    var lock_table_selection = $('input#lock_table_selection').val();
 
     if (location_id != '') {
         $.ajax({
             method: 'GET',
             url: '/modules/data/get-pos-details',
-            data: { location_id: location_id, transaction_id: transaction_id },
+            data: {
+                location_id: location_id,
+                transaction_id: transaction_id,
+                selected_table_id: selected_table_id,
+                lock_table_selection: lock_table_selection
+            },
             dataType: 'html',
             success: function(result) {
                 $('span#restaurant_module_span').html(result);

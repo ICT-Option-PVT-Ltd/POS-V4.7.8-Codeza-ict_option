@@ -11,6 +11,8 @@
 	@if(session('business.enable_rp') == 1)
         <input type="hidden" id="reward_point_enabled">
     @endif
+	<input type="hidden" id="selected_res_table_id" value="{{ $transaction->res_table_id ?? '' }}">
+	<input type="hidden" id="lock_table_selection" value="{{ !empty($lock_table_selection) ? 1 : 0 }}">
     @php
 		$is_discount_enabled = $pos_settings['disable_discount'] != 1 ? true : false;
 		$is_rp_enabled = session('business.enable_rp') == 1 ? true : false;
