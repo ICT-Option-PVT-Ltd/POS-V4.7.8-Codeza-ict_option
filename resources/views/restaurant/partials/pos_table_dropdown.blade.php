@@ -27,3 +27,19 @@
 	</div>
 </div>
 @endif
+
+@if(!empty($ongoing_table_bills) && count($ongoing_table_bills) > 0)
+<div class="clearfix"></div>
+<div class="col-sm-8">
+	<div class="alert alert-warning mb-0">
+		<strong>Ongoing table bills:</strong>
+		<ul class="mb-0 pl-20">
+			@foreach($ongoing_table_bills as $ongoing_bill)
+				<li>
+					{{ $ongoing_bill->table_name }} - {{ $ongoing_bill->invoice_no }}
+				</li>
+			@endforeach
+		</ul>
+	</div>
+</div>
+@endif

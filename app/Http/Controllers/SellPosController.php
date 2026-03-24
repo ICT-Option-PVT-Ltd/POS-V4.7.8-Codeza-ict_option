@@ -465,6 +465,21 @@ class SellPosController extends Controller
 
                 if ($this->transactionUtil->isModuleEnabled('tables')) {
                     $input['res_table_id'] = request()->get('res_table_id');
+                    if (!empty($input['res_table_id'])) {
+                        $ongoing_table_bill = $this->getOngoingTableBill(
+                            $business_id,
+                            $input['res_table_id'],
+                            $request->input('sub_type')
+                        );
+
+                        if (!empty($ongoing_table_bill)) {
+                            $invoice_ref = $ongoing_table_bill->invoice_no ?? $ongoing_table_bill->id;
+                            return [
+                                'success' => 0,
+                                'msg' => 'Table already has an ongoing bill (' . $invoice_ref . '). Please close it before creating a new bill.',
+                            ];
+                        }
+                    }
                 }
                 if ($this->transactionUtil->isModuleEnabled('service_staff')) {
                     $input['res_waiter_id'] = request()->get('res_waiter_id');
@@ -1178,6 +1193,22 @@ class SellPosController extends Controller
 
                 if ($this->transactionUtil->isModuleEnabled('tables')) {
                     $input['res_table_id'] = request()->get('res_table_id');
+                    if (!empty($input['res_table_id'])) {
+                        $ongoing_table_bill = $this->getOngoingTableBill(
+                            $business_id,
+                            $input['res_table_id'],
+                            $request->input('sub_type'),
+                            $id
+                        );
+
+                        if (!empty($ongoing_table_bill)) {
+                            $invoice_ref = $ongoing_table_bill->invoice_no ?? $ongoing_table_bill->id;
+                            return [
+                                'success' => 0,
+                                'msg' => 'Table already has an ongoing bill (' . $invoice_ref . '). Please close it before creating a new bill.',
+                            ];
+                        }
+                    }
                 }
                 if ($this->transactionUtil->isModuleEnabled('service_staff')) {
                     $input['res_waiter_id'] = request()->get('res_waiter_id');
@@ -2896,7 +2927,7 @@ class SellPosController extends Controller
      *
      */
     public function downloadPdf($id)
-    {   
+    {
         if (!(config('constants.enable_download_pdf') && auth()->user()->can("print_invoice"))) {
             abort(403, 'Unauthorized action.');
         }
@@ -2938,6 +2969,35 @@ class SellPosController extends Controller
     }
 
     /**
+     * Get any ongoing suspended bill for a table.
+     *
+     * @param int $business_id
+     * @param int $table_id
+     * @param string|null $sub_type
+     * @param int|null $exclude_transaction_id
+     * @return \App\Transaction|null
+     */
+    private function getOngoingTableBill($business_id, $table_id, $sub_type = null, $exclude_transaction_id = null)
+    {
+        $query = Transaction::where('business_id', $business_id)
+            ->where('type', 'sell')
+            ->where('is_suspend', 1)
+            ->where('res_table_id', $table_id);
+
+        if (!empty($exclude_transaction_id)) {
+            $query->where('id', '!=', $exclude_transaction_id);
+        }
+
+        if (!empty($sub_type)) {
+            $query->where('sub_type', $sub_type);
+        } else {
+            $query->whereNull('sub_type');
+        }
+
+        return $query->select('id', 'invoice_no')->first();
+    }
+
+     /**
      * download pdf for given quotation
      *
      */
