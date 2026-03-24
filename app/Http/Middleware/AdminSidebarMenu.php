@@ -279,6 +279,12 @@ class AdminSidebarMenu
                                     __('sale.pos_sale'),
                                     ['icon' => 'fa fas fa-plus-circle', 'active' => request()->segment(1) == 'pos' && request()->segment(2) == 'create']
                                 );
+
+                                $sub->url(
+                                    action('SellPosController@tableBills'),
+                                    'Table Bills',
+                                    ['icon' => 'fa fas fa-th-large', 'active' => request()->segment(1) == 'sells' && request()->segment(2) == 'table-bills']
+                                );
                             }
                         }
 

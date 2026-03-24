@@ -163,6 +163,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/sells/pos/get-product-suggestion', 'SellPosController@getProductSuggestion');
     Route::get('/sells/pos/get-featured-products/{location_id}', 'SellPosController@getFeaturedProducts');
     Route::get('/sells/pos/get-available-serial-number', 'SellPosController@getAvailableSerialNumber');
+    Route::get('/sells/table-bills', 'SellPosController@tableBills');
     Route::get('/reset-mapping', 'SellController@resetMapping');
 
     Route::resource('pos', 'SellPosController');

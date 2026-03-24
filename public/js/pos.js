@@ -591,6 +591,9 @@ $(document).ready(function() {
 
     //Finalize without showing payment options
     $('button.pos-express-finalize').click(function() {
+        if ($('#return_to_tables').length) {
+            $('#return_to_tables').val($(this).data('return_to_tables') ? 1 : 0);
+        }
 
         //Check if product is present or not.
         if ($('table#pos_table tbody').find('.product_row').length <= 0) {
@@ -805,6 +808,12 @@ $(document).ready(function() {
                             $('#modal_payment').modal('hide');
                             toastr.success(result.msg);
 
+                            if ($('#return_to_tables').length && $('#return_to_tables').val() == 1) {
+                                var location_id = $('input#location_id').val();
+                                window.location = '/sells/table-bills?location_id=' + location_id;
+                                return true;
+                            }
+
                             reset_pos_form();
 
                             //Check if enabled or not
@@ -813,6 +822,10 @@ $(document).ready(function() {
                             }
                         } else {
                             toastr.error(result.msg);
+                        }
+
+                        if ($('#return_to_tables').length) {
+                            $('#return_to_tables').val(0);
                         }
 
                         enable_pos_form_actions();

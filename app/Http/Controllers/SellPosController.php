@@ -36,6 +36,7 @@ use App\CustomerGroup;
 use App\Media;
 use App\Product;
 use App\ProductSerialNumber;
+use App\Restaurant\ResTable;
 use App\SellLineSerialNumber;
 use App\SellingPriceGroup;
 use App\TaxRate;
@@ -258,6 +259,9 @@ class SellPosController extends Controller
         //Added check because $users is of no use if enable_contact_assign if false
         $users = config('constants.enable_contact_assign') ? User::forDropdown($business_id, false, false, false, true) : [];
 
+        $selected_table_id = request()->get('res_table_id');
+        $lock_table_selection = !empty(request()->get('lock_table_selection')) ? true : false;
+
         return view('sale_pos.create')
             ->with(compact(
                 'edit_discount',
@@ -290,8 +294,72 @@ class SellPosController extends Controller
                 'invoice_schemes',
                 'default_invoice_schemes',
                 'invoice_layouts',
-                'users'
+                'users',
+                'selected_table_id',
+                'lock_table_selection'
             ));
+    }
+
+    /**
+     * Table-wise ongoing bill board for POS.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function tableBills()
+    {
+        if (!auth()->user()->can('sell.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+        $location_id = request()->get('location_id');
+
+        $register_details = $this->cashRegisterUtil->getCurrentCashRegister(auth()->user()->id);
+        if (empty($location_id) && !empty($register_details)) {
+            $location_id = $register_details->location_id;
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id, false, true);
+        $location_attributes = $business_locations['attributes'];
+        $business_locations = $business_locations['locations'];
+
+        if (empty($location_id) && !empty($business_locations)) {
+            $location_ids = array_keys($business_locations);
+            $location_id = !empty($location_ids[0]) ? $location_ids[0] : null;
+        }
+
+        $tables = collect();
+        $ongoing_bills = collect();
+        if (!empty($location_id)) {
+            $tables = ResTable::where('business_id', $business_id)
+                ->where('location_id', $location_id)
+                ->orderBy('name')
+                ->get();
+
+            $ongoing_bills = Transaction::withCount('sell_lines')
+                ->with(['contact'])
+                ->where('business_id', $business_id)
+                ->where('type', 'sell')
+                ->whereNull('sub_type')
+                ->where('location_id', $location_id)
+                ->whereNotNull('res_table_id')
+                ->where(function ($query) {
+                    $query->where('is_suspend', 1)
+                        ->orWhereIn('payment_status', ['due', 'partial']);
+                })
+                ->orderBy('updated_at', 'desc')
+                ->get();
+        }
+
+        $ongoing_bill_by_table = $ongoing_bills->keyBy('res_table_id');
+
+        return view('sale_pos.table_bills')->with(compact(
+            'tables',
+            'ongoing_bill_by_table',
+            'location_id',
+            'business_locations',
+            'location_attributes'
+        ));
     }
 
     /**
@@ -465,6 +533,21 @@ class SellPosController extends Controller
 
                 if ($this->transactionUtil->isModuleEnabled('tables')) {
                     $input['res_table_id'] = request()->get('res_table_id');
+                    if (!empty($input['res_table_id'])) {
+                        $ongoing_table_bill = $this->getOngoingTableBill(
+                            $business_id,
+                            $input['res_table_id'],
+                            $request->input('sub_type')
+                        );
+
+                        if (!empty($ongoing_table_bill)) {
+                            $invoice_ref = $ongoing_table_bill->invoice_no ?? $ongoing_table_bill->id;
+                            return [
+                                'success' => 0,
+                                'msg' => 'Table already has an ongoing bill (' . $invoice_ref . '). Please close it before creating a new bill.',
+                            ];
+                        }
+                    }
                 }
                 if ($this->transactionUtil->isModuleEnabled('service_staff')) {
                     $input['res_waiter_id'] = request()->get('res_waiter_id');
@@ -1034,9 +1117,10 @@ class SellPosController extends Controller
 
         //Added check because $users is of no use if enable_contact_assign if false
         $users = config('constants.enable_contact_assign') ? User::forDropdown($business_id, false, false, false, true) : [];
+        $lock_table_selection = !empty(request()->get('lock_table_selection')) ? true : false;
 
         return view('sale_pos.edit')
-            ->with(compact('business_details', 'taxes', 'payment_types', 'walk_in_customer', 'sell_details', 'transaction', 'payment_lines', 'location_printer_type', 'shortcuts', 'commission_agent', 'categories', 'pos_settings', 'change_return', 'types', 'customer_groups', 'brands', 'accounts', 'waiters', 'redeem_details', 'edit_price', 'edit_discount', 'shipping_statuses', 'warranties', 'sub_type', 'pos_module_data', 'invoice_schemes', 'default_invoice_schemes', 'invoice_layouts', 'featured_products', 'customer_due', 'users'));
+            ->with(compact('business_details', 'taxes', 'payment_types', 'walk_in_customer', 'sell_details', 'transaction', 'payment_lines', 'location_printer_type', 'shortcuts', 'commission_agent', 'categories', 'pos_settings', 'change_return', 'types', 'customer_groups', 'brands', 'accounts', 'waiters', 'redeem_details', 'edit_price', 'edit_discount', 'shipping_statuses', 'warranties', 'sub_type', 'pos_module_data', 'invoice_schemes', 'default_invoice_schemes', 'invoice_layouts', 'featured_products', 'customer_due', 'users', 'lock_table_selection'));
     }
 
     /**
@@ -1178,6 +1262,22 @@ class SellPosController extends Controller
 
                 if ($this->transactionUtil->isModuleEnabled('tables')) {
                     $input['res_table_id'] = request()->get('res_table_id');
+                    if (!empty($input['res_table_id'])) {
+                        $ongoing_table_bill = $this->getOngoingTableBill(
+                            $business_id,
+                            $input['res_table_id'],
+                            $request->input('sub_type'),
+                            $id
+                        );
+
+                        if (!empty($ongoing_table_bill)) {
+                            $invoice_ref = $ongoing_table_bill->invoice_no ?? $ongoing_table_bill->id;
+                            return [
+                                'success' => 0,
+                                'msg' => 'Table already has an ongoing bill (' . $invoice_ref . '). Please close it before creating a new bill.',
+                            ];
+                        }
+                    }
                 }
                 if ($this->transactionUtil->isModuleEnabled('service_staff')) {
                     $input['res_waiter_id'] = request()->get('res_waiter_id');
@@ -2896,7 +2996,7 @@ class SellPosController extends Controller
      *
      */
     public function downloadPdf($id)
-    {   
+    {
         if (!(config('constants.enable_download_pdf') && auth()->user()->can("print_invoice"))) {
             abort(403, 'Unauthorized action.');
         }
@@ -2938,6 +3038,38 @@ class SellPosController extends Controller
     }
 
     /**
+     * Get any ongoing suspended bill for a table.
+     *
+     * @param int $business_id
+     * @param int $table_id
+     * @param string|null $sub_type
+     * @param int|null $exclude_transaction_id
+     * @return \App\Transaction|null
+     */
+    private function getOngoingTableBill($business_id, $table_id, $sub_type = null, $exclude_transaction_id = null)
+    {
+        $query = Transaction::where('business_id', $business_id)
+            ->where('type', 'sell')
+            ->where('res_table_id', $table_id)
+            ->where(function ($q) {
+                $q->where('is_suspend', 1)
+                    ->orWhereIn('payment_status', ['due', 'partial']);
+            });
+
+        if (!empty($exclude_transaction_id)) {
+            $query->where('id', '!=', $exclude_transaction_id);
+        }
+
+        if (!empty($sub_type)) {
+            $query->where('sub_type', $sub_type);
+        } else {
+            $query->whereNull('sub_type');
+        }
+
+        return $query->select('id', 'invoice_no')->first();
+    }
+
+     /**
      * download pdf for given quotation
      *
      */
