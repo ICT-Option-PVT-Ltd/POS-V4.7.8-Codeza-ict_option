@@ -16,12 +16,22 @@
 			<button type="button" class="btn btn-default bg-yellow btn-flat @if($is_mobile) col-xs-6 @endif" id="pos-quotation"><i class="fas fa-edit"></i> @lang('lang_v1.quotation')</button>
 
 			@if(empty($pos_settings['disable_suspend']))
+				<input type="hidden" id="return_to_tables" name="return_to_tables" value="0">
 				<button type="button" 
 				class="@if($is_mobile) col-xs-6 @endif btn bg-red btn-default btn-flat no-print pos-express-finalize" 
 				data-pay_method="suspend"
 				title="@lang('lang_v1.tooltip_suspend')" >
 				<i class="fas fa-pause" aria-hidden="true"></i>
 				@lang('lang_v1.suspend')
+				</button>
+
+				<button type="button"
+					class="@if($is_mobile) col-xs-6 @endif btn bg-black btn-default btn-flat no-print pos-express-finalize"
+					data-pay_method="suspend"
+					data-return_to_tables="1"
+					id="pause_and_tables">
+					<i class="fas fa-th-large" aria-hidden="true"></i>
+					Pause & Tables
 				</button>
 			@endif
 

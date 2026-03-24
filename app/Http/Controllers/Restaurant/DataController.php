@@ -67,9 +67,12 @@ class DataController extends Controller
                     $ongoing_table_bills_query = Transaction::leftJoin('res_tables as rt', 'transactions.res_table_id', '=', 'rt.id')
                         ->where('transactions.business_id', $business_id)
                         ->where('transactions.type', 'sell')
-                        ->where('transactions.is_suspend', 1)
                         ->whereNotNull('transactions.res_table_id')
                         ->where('transactions.location_id', $location_id)
+                        ->where(function ($query) {
+                            $query->where('transactions.is_suspend', 1)
+                                ->orWhereIn('transactions.payment_status', ['due', 'partial']);
+                        })
                         ->select(
                             'transactions.id',
                             'transactions.invoice_no',

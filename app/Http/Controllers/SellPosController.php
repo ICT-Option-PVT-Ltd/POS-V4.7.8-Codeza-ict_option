@@ -340,10 +340,13 @@ class SellPosController extends Controller
                 ->with(['contact'])
                 ->where('business_id', $business_id)
                 ->where('type', 'sell')
-                ->where('is_suspend', 1)
                 ->whereNull('sub_type')
                 ->where('location_id', $location_id)
                 ->whereNotNull('res_table_id')
+                ->where(function ($query) {
+                    $query->where('is_suspend', 1)
+                        ->orWhereIn('payment_status', ['due', 'partial']);
+                })
                 ->orderBy('updated_at', 'desc')
                 ->get();
         }
@@ -3047,8 +3050,11 @@ class SellPosController extends Controller
     {
         $query = Transaction::where('business_id', $business_id)
             ->where('type', 'sell')
-            ->where('is_suspend', 1)
-            ->where('res_table_id', $table_id);
+            ->where('res_table_id', $table_id)
+            ->where(function ($q) {
+                $q->where('is_suspend', 1)
+                    ->orWhereIn('payment_status', ['due', 'partial']);
+            });
 
         if (!empty($exclude_transaction_id)) {
             $query->where('id', '!=', $exclude_transaction_id);

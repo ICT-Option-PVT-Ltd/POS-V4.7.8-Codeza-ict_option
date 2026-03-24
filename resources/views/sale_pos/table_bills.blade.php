@@ -37,6 +37,7 @@
                         $is_ongoing = !empty($bill);
                         $card_class = $is_ongoing ? 'ongoing-card' : 'available-card';
                         $status_text = $is_ongoing ? 'Ongoing bill' : 'Available';
+                        $action_text = $is_ongoing ? 'Resume Bill' : 'Start Bill';
                         $open_url = $is_ongoing
                             ? action('SellPosController@edit', [$bill->id]) . '?lock_table_selection=1&from_table_bills=1'
                             : action('SellPosController@create', ['res_table_id' => $table->id, 'lock_table_selection' => 1, 'from_table_bills' => 1]);
@@ -52,6 +53,7 @@
                                     <div><b>Invoice:</b> {{ $bill->invoice_no }}</div>
                                     <div><b>Items:</b> {{ $bill->sell_lines_count }}</div>
                                     <div><b>Total:</b> @format_currency($bill->final_total)</div>
+                                    <div><b>Payment:</b> {{ ucfirst($bill->payment_status ?? 'due') }}</div>
                                     <div><b>Customer:</b> {{ optional($bill->contact)->name }}</div>
                                 </div>
                             @else
@@ -59,6 +61,7 @@
                                     <div><b>Ready for new bill</b></div>
                                 </div>
                             @endif
+                            <div class="table-action">{{ $action_text }}</div>
                         </a>
                     </div>
                 @empty
@@ -109,6 +112,15 @@
     .table-summary {
         font-size: 12px;
         line-height: 1.6;
+    }
+
+    .table-action {
+        margin-top: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        border-top: 1px solid rgba(255, 255, 255, 0.35);
+        padding-top: 6px;
     }
 </style>
 @endsection
